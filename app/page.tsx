@@ -87,10 +87,43 @@ export default function Home() {
   const downTimestampRef = useRef<number>(0);
   const wasFormGoodDuringDownRef = useRef(true);
   const angleHistoryRef = useRef<number[]>([]);
+
+  // 자세가 한두 프레임 흔들려도 UI가 깜빡이지 않도록 안정화용 Ref
+  const stableFormRef = useRef(true);
+  const goodFormFramesRef = useRef(0);
+  const badFormFramesRef = useRef(0);
+  const feedbackTimerRef = useRef<number | null>(null);
+  const lastFeedbackRef = useRef(
+    '카메라 앞에 서서 운동을 시작해보세요.'
+  );
+
+  // MediaPipe는 한 번만 초기화하고, 아래 Ref로 최신 상태를 읽습니다.
+  const isGoalReached = goodReps >= targetReps;
+
+  const selectedExerciseRef = useRef(selectedExercise);
+  const isWorkoutStartedRef = useRef(isWorkoutStarted);
+  const isGoalReachedRef = useRef(isGoalReached);
+  const targetRepsRef = useRef(targetReps);
+  const poseBusyRef = useRef(false);
+
+  useEffect(() => {
+    selectedExerciseRef.current = selectedExercise;
+  }, [selectedExercise]);
+
+  useEffect(() => {
+    isWorkoutStartedRef.current = isWorkoutStarted;
+  }, [isWorkoutStarted]);
+
+  useEffect(() => {
+    isGoalReachedRef.current = isGoalReached;
+  }, [isGoalReached]);
+
+  useEffect(() => {
+    targetRepsRef.current = targetReps;
+  }, [targetReps]);
   const savedResultRef = useRef(false);
 
   const config = EXERCISE_CONFIGS[selectedExercise];
-  const isGoalReached = goodReps >= targetReps;
   const score =
     reps > 0
       ? Math.min(100, Math.round((goodReps / reps) * 100))
@@ -193,6 +226,16 @@ export default function Home() {
     downTimestampRef.current = 0;
     wasFormGoodDuringDownRef.current = true;
     angleHistoryRef.current = [];
+
+    stableFormRef.current = true;
+    goodFormFramesRef.current = 0;
+    badFormFramesRef.current = 0;
+    lastFeedbackRef.current = '카메라 앞에서 편하게 운동을 시작해보세요.';
+
+    if (feedbackTimerRef.current !== null) {
+      window.clearTimeout(feedbackTimerRef.current);
+      feedbackTimerRef.current = null;
+    }
     savedResultRef.current = false;
   };
 
@@ -251,7 +294,7 @@ export default function Home() {
         });
 
         poseInstance.setOptions({
-          modelComplexity: 1,
+          modelComplexity: 2,
           smoothLandmarks: true,
           minDetectionConfidence: 0.6,
           minTrackingConfidence: 0.6,
@@ -296,13 +339,16 @@ export default function Home() {
           const knee = isRightSide ? lm[26] : lm[25];
           const ankle = isRightSide ? lm[28] : lm[27];
 
+          const activeExercise = selectedExerciseRef.current;
+          const config = EXERCISE_CONFIGS[activeExercise];
+
           let activeAngle = 180;
           let currentTorsoAngle = 180;
           let isGoodForm = true;
 
           if (shoulder && hip && knee) {
             if (
-              selectedExercise === 'PUSHUP' &&
+              activeExercise === 'PUSHUP' &&
               elbow &&
               wrist
             ) {
@@ -320,7 +366,7 @@ export default function Home() {
                 isGoodForm = false;
               }
             } else if (
-              selectedExercise === 'SQUAT' &&
+              activeExercise === 'SQUAT' &&
               ankle
             ) {
               activeAngle = getSmoothedAngle(
@@ -340,9 +386,35 @@ export default function Home() {
 
             setCurrentAngle(activeAngle);
             setTorsoAngle(currentTorsoAngle);
-            setIsGoodFormUI(isGoodForm);
 
-            if (isWorkoutStarted && !isGoalReached) {
+            // MediaPipe 결과가 프레임마다 살짝 흔들려도
+            // 색상/UI가 초록↔빨강으로 깜빡이지 않도록 3프레임 이상 유지합니다.
+            if (isGoodForm) {
+              goodFormFramesRef.current += 1;
+              badFormFramesRef.current = 0;
+            } else {
+              badFormFramesRef.current += 1;
+              goodFormFramesRef.current = 0;
+            }
+
+            if (
+              !stableFormRef.current &&
+              goodFormFramesRef.current >= 3
+            ) {
+              stableFormRef.current = true;
+            }
+
+            if (
+              stableFormRef.current &&
+              badFormFramesRef.current >= 3
+            ) {
+              stableFormRef.current = false;
+            }
+
+            const stableIsGoodForm = stableFormRef.current;
+            setIsGoodFormUI(stableIsGoodForm);
+
+            if (isWorkoutStartedRef.current && !isGoalReachedRef.current) {
               const now = Date.now();
 
               if (
@@ -381,28 +453,34 @@ export default function Home() {
                 isDownRef.current = false;
               }
 
-              const nextFeedback = !isGoodForm
-              ? selectedExercise === 'PUSHUP'
-                ? '거의 좋아요! 허리와 엉덩이를 조금 더 일직선으로 유지해보세요.'
-                : '거의 좋아요! 가슴을 조금 더 펴고 천천히 내려가보세요.'
-              : activeAngle <= config.downThreshold
-                ? '좋아요! 충분히 내려갔어요.'
-                : activeAngle >= config.upThreshold
-                  ? '🟢 좋아요! 한 번 완료됐어요.'
-                  : config.guideText;
+              const nextFeedback = !stableFormRef.current
+                ? activeExercise === 'PUSHUP'
+                  ? '거의 좋아요! 허리와 엉덩이를 조금 더 일직선으로 유지해보세요.'
+                  : '거의 좋아요! 가슴을 조금 더 펴고 천천히 내려가보세요.'
+                : activeAngle <= config.downThreshold
+                  ? '좋아요! 충분히 내려갔어요.'
+                  : activeAngle >= config.upThreshold
+                    ? '🟢 좋아요! 한 번 완료됐어요.'
+                    : config.guideText;
 
-            // 카메라 프레임마다 문구가 깜빡이지 않도록 잠깐 유지합니다.
-            if (nextFeedback !== feedback) {
-              setFeedbackVisible(false);
-              window.setTimeout(() => {
-                setFeedback(nextFeedback);
-                setFeedbackVisible(true);
-              }, 350);
-            }
+              // 같은 문구가 반복되는 동안에는 React state를 건드리지 않습니다.
+              // 문구가 실제로 바뀔 때만 한 번 변경합니다.
+              if (nextFeedback !== lastFeedbackRef.current) {
+                lastFeedbackRef.current = nextFeedback;
+
+                if (feedbackTimerRef.current !== null) {
+                  window.clearTimeout(feedbackTimerRef.current);
+                }
+
+                feedbackTimerRef.current = window.setTimeout(() => {
+                  setFeedback(nextFeedback);
+                  feedbackTimerRef.current = null;
+                }, 500);
+              }
             }
           }
 
-          const neonColor = isGoodForm
+          const neonColor = stableFormRef.current
             ? '#00ffcc'
             : '#ff0055';
 
@@ -467,9 +545,15 @@ export default function Home() {
 
           if (
             poseInstance &&
-            videoElement.readyState >= 2
+            videoElement.readyState >= 2 &&
+            !poseBusyRef.current
           ) {
-            await poseInstance.send({ image: videoElement });
+            poseBusyRef.current = true;
+            try {
+              await poseInstance.send({ image: videoElement });
+            } finally {
+              poseBusyRef.current = false;
+            }
           }
 
           animationFrameId =
@@ -508,13 +592,7 @@ export default function Home() {
         stream.getTracks().forEach((track) => track.stop());
       }
     };
-  }, [
-    isScriptLoaded,
-    selectedExercise,
-    isWorkoutStarted,
-    isGoalReached,
-    feedback,
-  ]);
+  }, [isScriptLoaded]);
 
   return (
     <main className="min-h-screen bg-slate-950 text-white font-sans">
@@ -667,11 +745,11 @@ export default function Home() {
             {isLoaded && (
               <>
                 <div className="absolute left-3 right-3 top-3 z-20 flex items-start justify-between gap-2">
-                  <div className="rounded-2xl border border-cyan-500/40 bg-slate-950/85 px-5 py-2 backdrop-blur">
+                  <div className="rounded-xl border border-cyan-500/40 bg-slate-950/85 px-3 py-1.5 backdrop-blur sm:rounded-2xl sm:px-5 sm:py-2">
                     <p className="text-[9px] font-black tracking-widest text-cyan-400">
                       CURRENT REPS
                     </p>
-                    <p className="text-2xl font-black">
+                    <p className="text-xl font-black sm:text-2xl">
                       <span className="text-cyan-400">
                         {goodReps}
                       </span>
@@ -695,9 +773,7 @@ export default function Home() {
                 <div className="absolute bottom-3 left-3 right-3 z-20">
                   <div className="mb-2 rounded-xl border border-slate-700 bg-slate-950/85 px-4 py-2 backdrop-blur">
                     <p
-                      className={`text-sm font-black text-white transition-opacity duration-300 ${
-                        feedbackVisible ? 'opacity-100' : 'opacity-40'
-                      }`}
+                      className="text-xs font-black text-white transition-none opacity-100 sm:text-sm"
                     >
                       {feedback}
                     </p>
@@ -720,7 +796,7 @@ export default function Home() {
 
                     <div className="ml-auto rounded-xl bg-slate-950/80 px-3 py-2 text-right backdrop-blur">
                       <p className="text-[9px] font-bold text-slate-500">TIP</p>
-                      <p className="max-w-[150px] truncate text-[10px] text-slate-300">
+                      <p className="hidden max-w-[150px] truncate text-[10px] text-slate-300 sm:block">
                         {config.guideText}
                       </p>
                     </div>
