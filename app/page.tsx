@@ -1,9 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Script from 'next/script';
 
-type ExerciseType = 'PUSHUP' | 'SQUAT';
+/* ================================================================== */
+/*  공통 타입 / 설정 (운동 목록 화면 + AI 코칭 화면이 함께 사용)              */
+/* ================================================================== */
+
+type ExerciseType = 'PUSHUP' | 'SQUAT' | 'LUNGE' | 'SITUP' | 'JUMPING_JACK';
 
 interface ExerciseConfig {
   name: string;
@@ -47,6 +51,36 @@ const EXERCISE_CONFIGS: Record<ExerciseType, ExerciseConfig> = {
     torsoMinAngle: 120,
     guideText: '무릎을 충분히 낮추고 천천히 일어나세요.',
   },
+  LUNGE: {
+    name: '런지 (Lunge)',
+    shortName: '런지',
+    icon: '🏃',
+    defaultTarget: 10,
+    downThreshold: 105,
+    upThreshold: 155,
+    torsoMinAngle: 115,
+    guideText: '앞쪽 무릎을 천천히 굽히고 상체를 바르게 세우세요.',
+  },
+  SITUP: {
+    name: '윗몸일으키기 (Sit-up)',
+    shortName: '윗몸일으키기',
+    icon: '🔥',
+    defaultTarget: 10,
+    downThreshold: 125,
+    upThreshold: 70,
+    torsoMinAngle: 60,
+    guideText: '복부에 힘을 주고 천천히 상체를 일으켜주세요.',
+  },
+  JUMPING_JACK: {
+    name: '점핑잭 (Jumping Jack)',
+    shortName: '점핑잭',
+    icon: '⭐',
+    defaultTarget: 10,
+    downThreshold: 0,
+    upThreshold: 1,
+    torsoMinAngle: 140,
+    guideText: '팔과 다리를 충분히 벌렸다가 다시 모아주세요.',
+  },
 };
 
 const POSE_CONNECTIONS = [
@@ -57,15 +91,674 @@ const POSE_CONNECTIONS = [
 
 const STORAGE_KEY = 'chowifit-workout-history';
 
-export default function Home() {
+/* ================================================================== */
+/*  wger 공개 운동 API (인증 불필요) — https://wger.de/en/software/api  */
+/* ================================================================== */
+
+const WGER_BASE = 'https://wger.de/api/v2';
+
+interface WgerCategory {
+  id: number;
+  name: string;
+}
+
+interface WgerMuscle {
+  id: number;
+  name: string;
+  name_en: string;
+}
+
+interface WgerExercise {
+  id: number;
+  uuid?: string;
+  name?: string | null;
+  description?: string | null;
+  category: number;
+  muscles?: number[];
+  muscles_secondary?: number[];
+  equipment?: number[];
+}
+
+interface WgerExerciseDetail {
+  id: number;
+  category?: { id: number; name: string };
+  muscles?: { id: number; name_en: string; name: string }[];
+  muscles_secondary?: { id: number; name_en: string; name: string }[];
+  equipment?: { id: number; name: string }[];
+  translations?: { language: number; name: string; description: string }[];
+}
+
+const SUPPORTED_EXERCISES: {
+  type: ExerciseType;
+  name: string;
+  icon: string;
+  blurb: string;
+}[] = [
+  {
+    type: 'PUSHUP',
+    name: '푸시업',
+    icon: '💪',
+    blurb: '팔꿈치와 몸의 정렬을 분석해 반복 횟수와 자세를 알려줘요.',
+  },
+  {
+    type: 'SQUAT',
+    name: '스쿼트',
+    icon: '🦵',
+    blurb: '무릎과 엉덩이 각도를 추적해 실시간으로 자세를 교정해줘요.',
+  },
+  {
+    type: 'LUNGE',
+    name: '런지',
+    icon: '🏃',
+    blurb: '무릎 각도와 상체 정렬을 분석해 올바른 런지 동작을 도와줘요.',
+  },
+  {
+    type: 'SITUP',
+    name: '윗몸일으키기',
+    icon: '🔥',
+    blurb: '상체와 다리의 움직임을 분석해 반복 횟수를 세어줘요.',
+  },
+  {
+    type: 'JUMPING_JACK',
+    name: '점핑잭',
+    icon: '⭐',
+    blurb: '팔과 다리의 벌어짐을 분석해 점핑잭 횟수를 세어줘요.',
+  },
+];
+
+const CATEGORY_ICONS: Record<string, string> = {
+  Abs: '🔥',
+  Arms: '💪',
+  Back: '🧗',
+  Calves: '🦶',
+  Cardio: '❤️',
+  Chest: '🎯',
+  Legs: '🦵',
+  Shoulders: '🏋️',
+};
+
+// 이름이 없거나 undefined/null 인 레코드가 와도 절대 죽지 않도록 방어
+function normalizeSearchText(value?: string | null) {
+  return (value ?? '')
+    .toLowerCase()
+    .normalize('NFKC')
+    .replace(/\s+/g, '');
+}
+
+const EXERCISE_SEARCH_ALIASES: Record<ExerciseType, string[]> = {
+  PUSHUP: ['pushup', 'push-up', 'push up', '푸시업', '푸쉬업', '푸쉬', '팔굽혀펴기', '팔굽혀펴'],
+  SQUAT: ['squat', '스쿼트', '스쿼'],
+  LUNGE: ['lunge', '런지'],
+  SITUP: ['situp', 'sit-up', 'sit up', '윗몸일으키기', '윗몸일으키', '윗몸', '싯업'],
+  JUMPING_JACK: ['jumpingjack', 'jumping-jack', 'jumping jack', 'jump jack', '점핑잭', '점핑', '팔벌려뛰기'],
+};
+
+function detectSupportedExercise(name?: string | null): ExerciseType | null {
+  const n = normalizeSearchText(name);
+  if (!n) return null;
+
+  for (const [type, aliases] of Object.entries(EXERCISE_SEARCH_ALIASES) as [ExerciseType, string[]][]) {
+    if (aliases.some((alias) => n.includes(normalizeSearchText(alias)))) {
+      return type;
+    }
+  }
+
+  return null;
+}
+
+function exerciseMatchesSearch(exercise: WgerExercise, rawTerm: string) {
+  const term = normalizeSearchText(rawTerm);
+  if (!term) return true;
+
+  const name = normalizeSearchText(exercise.name);
+  const description = normalizeSearchText(stripHtml(exercise.description));
+
+  // 기본 검색: 운동 이름이나 설명에 검색어가 들어가면 바로 노출합니다.
+  if (name.includes(term) || description.includes(term)) return true;
+
+  // AI 지원 운동은 한국어 별칭으로도 검색할 수 있습니다.
+  // 예: 푸 / 쉬 / 푸쉬 / 팔굽혀펴 -> 모두 푸시업으로 연결
+  const supported = detectSupportedExercise(exercise.name);
+  if (supported) {
+    return EXERCISE_SEARCH_ALIASES[supported].some((alias) => {
+      const normalizedAlias = normalizeSearchText(alias);
+      return normalizedAlias.includes(term) || term.includes(normalizedAlias);
+    });
+  }
+
+  // API 데이터에 영어 이름만 있는 경우에도 AI 지원 운동의 별칭과
+  // 연결되는 운동이면 검색에 포함할 수 있도록 영문 표기를 검사합니다.
+  const lowerRaw = normalizeSearchText(exercise.name);
+  for (const aliases of Object.values(EXERCISE_SEARCH_ALIASES)) {
+    if (aliases.some((alias) => {
+      const a = normalizeSearchText(alias);
+      return lowerRaw.includes(a) && a.length > 0;
+    })) {
+      return true;
+    }
+  }
+
+  // 일반 운동도 검색어의 각 글자가 이름에 들어가면 찾을 수 있게 합니다.
+  // 예: '벤' -> '벤치...'처럼 한 글자 단위 검색을 허용합니다.
+  const koreanText = normalizeSearchText(`${exercise.name ?? ''} ${stripHtml(exercise.description)}`);
+  return [...term].every((char) => koreanText.includes(char));
+}
+
+function createVirtualAiExercise(type: ExerciseType): WgerExercise {
+  const config = EXERCISE_CONFIGS[type];
+  const meta = SUPPORTED_EXERCISES.find((item) => item.type === type);
+
+  return {
+    id: -(['PUSHUP', 'SQUAT', 'LUNGE', 'SITUP', 'JUMPING_JACK'] as ExerciseType[]).indexOf(type) - 1,
+    name: config.shortName,
+    description: meta?.blurb ?? config.guideText,
+    category: 0,
+    muscles: [],
+    muscles_secondary: [],
+    equipment: [],
+  };
+}
+
+function stripHtml(html?: string | null) {
+  if (!html) return '';
+  return html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function fetchJson<T>(url: string): Promise<T> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`wger API 오류 (${res.status})`);
+  return res.json();
+}
+
+/* ================================================================== */
+/*  운동 목록 화면                                                      */
+/* ================================================================== */
+
+function CatalogView({
+  onStart,
+}: {
+  onStart: (type: ExerciseType) => void;
+}) {
+  const [selectedExercise, setSelectedExercise] = useState<ExerciseType>('PUSHUP');
+  const [allExercises, setAllExercises] = useState<WgerExercise[]>([]);
+  const [muscleMap, setMuscleMap] = useState<Record<number, string>>({});
+  const [libraryLoading, setLibraryLoading] = useState(true);
+  const [libraryError, setLibraryError] = useState('');
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchResults, setSearchResults] = useState<WgerExercise[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const searchDebounceRef = useRef<number | null>(null);
+
+  const [detailId, setDetailId] = useState<number | null>(null);
+  const [detail, setDetail] = useState<WgerExerciseDetail | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+
+  // 첫 화면에 바로 보여줄 AI 자세 교정 운동입니다.
+  // 나중에 운동을 더 추가하고 싶으면 SUPPORTED_EXERCISES에 항목만 추가하면 됩니다.
+  const popularExercises = SUPPORTED_EXERCISES;
+
+  // 전체 운동 목록은 화면 진입 시 한 번 받아서 '둘러보기'에 사용합니다.
+  // 이 요청에는 API 키가 필요하지 않습니다.
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        setLibraryLoading(true);
+        setLibraryError('');
+
+        const [exerciseRes, muscleRes] = await Promise.all([
+          // 브라우저에서 wger를 직접 호출하지 않고 Next.js 서버 API를 통해 가져옵니다.
+          // 이렇게 하면 CORS 문제와 오래된 검색 엔드포인트 문제를 피할 수 있습니다.
+          fetchJson<{ results: WgerExercise[] }>('/api/exercises'),
+          fetchJson<{ results: WgerMuscle[] }>(
+            `${WGER_BASE}/muscle/?limit=50&format=json`
+          ),
+        ]);
+
+        if (cancelled) return;
+
+        const clean = (exerciseRes.results ?? []).filter(
+          (ex) => typeof ex?.name === 'string' && ex.name.trim().length > 0
+        );
+        setAllExercises(clean);
+
+        const map: Record<number, string> = {};
+        (muscleRes.results ?? []).forEach((m) => {
+          map[m.id] = m.name_en || m.name;
+        });
+        setMuscleMap(map);
+      } catch (error) {
+        console.error('전체 운동 목록 로딩 오류:', error);
+        if (!cancelled) {
+          setLibraryError(
+            '전체 운동 목록을 불러오지 못했어요. 그래도 위의 AI 운동은 바로 사용할 수 있어요.'
+          );
+          setAllExercises([]);
+        }
+      } finally {
+        if (!cancelled) setLibraryLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // 검색은 wger의 /exercise/search/에 의존하지 않습니다.
+  // 최신 wger 릴리스에서 해당 엔드포인트가 제거되었기 때문에,
+  // 서버에서 받아온 전체 운동 목록을 이름으로 검색합니다.
+  useEffect(() => {
+    if (searchDebounceRef.current !== null) {
+      window.clearTimeout(searchDebounceRef.current);
+    }
+
+    const term = searchTerm.trim();
+
+    if (term.length === 0) {
+      setSearchResults(null);
+      setSearching(false);
+      return;
+    }
+
+    setSearching(true);
+
+    searchDebounceRef.current = window.setTimeout(() => {
+      const normalizedTerm = normalizeSearchText(term);
+
+      // 1. wger 전체 운동 목록 검색
+      const results = allExercises.filter((exercise) =>
+        exerciseMatchesSearch(exercise, term)
+      );
+
+      // 2. AI 지원 운동은 API에 해당 운동이 어떤 이름으로 저장되어 있든
+      //    한국어 별칭으로 반드시 검색되도록 가상 결과를 하나씩 추가합니다.
+      //    따라서 다음 검색이 모두 같은 푸시업을 찾습니다.
+      //    '푸', '쉬', '푸쉬', '팔굽혀펴'
+      const aiMatches = (Object.keys(EXERCISE_CONFIGS) as ExerciseType[])
+        .filter((type) => {
+          const aliases = EXERCISE_SEARCH_ALIASES[type].map(normalizeSearchText);
+          return aliases.some(
+            (alias) => alias.includes(normalizedTerm) || normalizedTerm.includes(alias)
+          );
+        })
+        .map(createVirtualAiExercise);
+
+      const merged = [...aiMatches, ...results].filter(
+        (exercise, index, arr) =>
+          arr.findIndex((item) => item.id === exercise.id) === index
+      );
+
+      setSearchResults(merged);
+      setSearching(false);
+    }, 120);
+
+    return () => {
+      if (searchDebounceRef.current !== null) {
+        window.clearTimeout(searchDebounceRef.current);
+      }
+    };
+  }, [searchTerm, allExercises]);
+
+  useEffect(() => {
+    if (detailId === null) {
+      setDetail(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        setLoadingDetail(true);
+        const data = await fetchJson<WgerExerciseDetail>(
+          `${WGER_BASE}/exerciseinfo/${detailId}/?format=json`
+        );
+        if (!cancelled) setDetail(data);
+      } catch {
+        if (!cancelled) setDetail(null);
+      } finally {
+        if (!cancelled) setLoadingDetail(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [detailId]);
+
+  const selectedConfig = EXERCISE_CONFIGS[selectedExercise];
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const isSearchMode = normalizedSearch.length >= 1;
+  const displayedExercises = isSearchMode
+    ? (searchResults ?? [])
+    : allExercises.slice(0, 24);
+
+  const detailTranslation = useMemo(() => {
+    if (!detail?.translations?.length) return null;
+    return detail.translations.find((t) => t.language === 2) ?? detail.translations[0];
+  }, [detail]);
+
+  const selectSupportedExercise = (name?: string | null) => {
+    const supported = detectSupportedExercise(name);
+    if (!supported) return false;
+    setSelectedExercise(supported);
+    return true;
+  };
+
+  return (
+    <main className="min-h-screen overflow-hidden bg-[#07090d] text-white font-sans selection:bg-cyan-400/30">
+      <header className="relative mx-auto max-w-7xl px-5 pb-5 pt-8 sm:px-8 sm:pt-10">
+        <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 shadow-[0_0_30px_rgba(34,211,238,0.06)]"><span className="h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(103,232,249,0.8)]" /><span className="text-[10px] font-black tracking-[0.24em] text-cyan-300">CHOWIFIT AI FITNESS</span></div>
+        <h1 className="mt-5 max-w-3xl text-4xl font-black leading-[1.05] tracking-[-0.04em] sm:text-6xl">
+          오늘의 운동을
+          <span className="block bg-gradient-to-r from-cyan-300 via-white to-cyan-100 bg-clip-text text-transparent">더 정확하게.</span>
+        </h1>
+        <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-400 sm:text-base">AI가 카메라 속 움직임을 실시간으로 분석해요. 운동을 고르고 목표 횟수만 설정하면 바로 시작할 수 있어요.</p>
+        <div className="mt-6 flex flex-wrap gap-2 text-[10px] font-bold text-slate-400"><span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5">LIVE POSE</span><span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5">REAL-TIME FEEDBACK</span><span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5">WORKOUT HISTORY</span></div>
+      </header>
+
+      <div className="relative mx-auto max-w-7xl px-4 pb-16 sm:px-8"><div className="pointer-events-none absolute -top-20 left-1/4 h-72 w-72 rounded-full bg-cyan-400/10 blur-[110px]" /><div className="pointer-events-none absolute right-0 top-80 h-64 w-64 rounded-full bg-blue-500/10 blur-[100px]" />
+        {/* ============================================================ */}
+        {/* AI 자세 교정 운동 */}
+        {/* ============================================================ */}
+        <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.035] p-5 shadow-[0_25px_80px_rgba(0,0,0,0.32)] backdrop-blur-xl sm:p-7">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5"><span className="text-[9px] font-black tracking-[0.2em] text-cyan-300">AI POSTURE COACH</span><span className="h-1 w-1 rounded-full bg-cyan-300" /></div>
+              <h2 className="text-2xl font-black tracking-tight sm:text-3xl">운동을 골라보세요</h2>
+              <p className="mt-1 text-xs text-slate-500">
+                자주 하는 운동을 바로 고르거나 아래 검색창에서 운동을 찾아보세요.
+              </p>
+            </div>
+
+            <div className="w-full lg:max-w-sm">
+              <label className="mb-1.5 block text-[10px] font-black tracking-widest text-slate-500">
+                운동 검색
+              </label>
+              <div className="relative"><span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">⌕</span><input
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="운동 이름 검색 · 예: 푸 / 쉬 / push / squat"
+                className="w-full rounded-2xl border border-white/10 bg-black/20 py-3 pl-10 pr-4 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-400/60 focus:bg-black/30 focus:ring-4 focus:ring-cyan-400/5"
+              /></div>
+            </div>
+          </div>
+
+          <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
+            {popularExercises.map((ex) => {
+              const selected = selectedExercise === ex.type && !isSearchMode;
+              return (
+                <button
+                  key={ex.type}
+                  type="button"
+                  onClick={() => setSelectedExercise(ex.type)}
+                  className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition duration-300 hover:-translate-y-1 ${
+                    selected
+                      ? 'border-cyan-300/70 bg-cyan-400/10 shadow-[0_20px_50px_rgba(0,255,204,0.10)]'
+                      : 'border-white/10 bg-black/20 hover:border-white/20 hover:bg-white/[0.045]'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-2xl transition group-hover:scale-105">{ex.icon}</span>
+                    {selected && (
+                      <span className="rounded-full bg-cyan-400 px-2 py-1 text-[8px] font-black text-slate-950">
+                        선택됨
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-3 text-sm font-black">{ex.name}</p>
+                  <p className="mt-1 text-[10px] leading-4 text-slate-500">AI 자세 교정</p>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-5 flex flex-col gap-4 rounded-[1.5rem] border border-cyan-300/20 bg-gradient-to-r from-cyan-400/10 via-transparent to-transparent p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+            <div>
+              <p className="text-[10px] font-black tracking-widest text-slate-500">
+                SELECTED EXERCISE
+              </p>
+              <p className="mt-1 text-lg font-black text-cyan-300">
+                {selectedConfig.icon} {selectedConfig.shortName}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => onStart(selectedExercise)}
+              className="rounded-2xl bg-white px-6 py-3.5 font-black text-slate-950 shadow-[0_10px_40px_rgba(255,255,255,0.08)] transition hover:-translate-y-0.5 hover:bg-cyan-200"
+            >
+              자세 교정 받기 →
+            </button>
+          </div>
+        </section>
+
+        {/* ============================================================ */}
+        {/* 전체 운동 라이브러리 + 검색 */}
+        {/* ============================================================ */}
+        <section className="mt-10">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-xs font-black tracking-widest text-cyan-400">
+                EXERCISE LIBRARY
+              </p>
+              <h2 className="mt-1 text-xl font-black">
+                {isSearchMode ? '검색한 운동' : '더 많은 운동 둘러보기'}
+              </h2>
+              <p className="mt-1 text-xs text-slate-500">
+                {isSearchMode
+                  ? `“${searchTerm}” 검색 결과를 보여줘요.`
+                  : '아래에 운동 목록을 먼저 보여주고, 원하는 운동은 검색으로 더 찾을 수 있어요.'}
+              </p>
+            </div>
+          </div>
+
+          {libraryError && (
+            <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4 text-xs text-amber-300">
+              {libraryError}
+            </div>
+          )}
+
+          {libraryLoading && (
+            <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-36 animate-pulse rounded-2xl border border-slate-800 bg-slate-900/60"
+                />
+              ))}
+            </div>
+          )}
+
+          {!libraryLoading && searching && (
+            <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900 p-5 text-center text-xs text-slate-500">
+              운동을 검색하는 중...
+            </div>
+          )}
+
+          {!libraryLoading && !searching && isSearchMode && displayedExercises.length === 0 && (
+            <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900 p-6 text-center">
+              <p className="text-sm font-black text-slate-300">검색 결과가 없어요.</p>
+              <p className="mt-1 text-xs text-slate-500">
+                한 글자만 입력해도 찾을 수 있어요. 예: 푸 / 쉬 / 팔굽혀펴 / 스 / 쿼 / 런
+              </p>
+            </div>
+          )}
+
+          {!libraryLoading && !searching && !isSearchMode && displayedExercises.length === 0 && (
+            <div className="mt-4 rounded-2xl border border-dashed border-slate-700 bg-slate-900/60 p-6 text-center">
+              <p className="text-sm font-black text-slate-300">전체 운동 목록을 불러오지 못했어요.</p>
+              <p className="mt-1 text-xs text-slate-500">
+                위 검색창에서 운동 이름을 검색해볼 수 있어요.
+              </p>
+            </div>
+          )}
+
+          {!libraryLoading && !searching && displayedExercises.length > 0 && (
+            <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {displayedExercises.map((ex) => {
+                const name = ex.name ?? '';
+                const supported = detectSupportedExercise(name);
+                const muscleNames = (ex.muscles ?? [])
+                  .map((id) => muscleMap[id])
+                  .filter(Boolean)
+                  .slice(0, 2);
+                const desc = stripHtml(ex.description);
+
+                return (
+                  <div
+                    key={ex.id}
+                    className="group flex flex-col justify-between rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-5 transition duration-300 hover:-translate-y-1 hover:border-white/20 hover:bg-white/[0.05]"
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-black leading-tight">{name}</p>
+                        {supported ? (
+                          <span className="shrink-0 rounded-full border border-cyan-400/50 bg-cyan-400/10 px-2 py-0.5 text-[9px] font-black text-cyan-300">
+                            AI 지원
+                          </span>
+                        ) : (
+                          <span className="shrink-0 rounded-full border border-slate-700 bg-slate-950 px-2 py-0.5 text-[9px] font-black text-slate-500">
+                            정보 보기
+                          </span>
+                        )}
+                      </div>
+
+                      {muscleNames.length > 0 && (
+                        <p className="mt-1.5 text-[10px] text-slate-500">
+                          {muscleNames.join(' · ')}
+                        </p>
+                      )}
+
+                      <p className="mt-2 line-clamp-3 text-[11px] leading-5 text-slate-400">
+                        {desc || '운동 설명이 아직 없어요.'}
+                      </p>
+                    </div>
+
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setDetailId(ex.id)}
+                        className="flex-1 rounded-xl border border-white/10 bg-black/20 py-2.5 text-[11px] font-bold text-slate-300 transition hover:border-white/20 hover:bg-white/[0.05]"
+                      >
+                        자세히 보기
+                      </button>
+
+                      {supported && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (selectSupportedExercise(name)) {
+                              onStart(supported);
+                            }
+                          }}
+                          className="flex-1 rounded-xl bg-white py-2.5 text-[11px] font-black text-slate-950 transition hover:bg-cyan-200"
+                        >
+                          자세 교정 받기
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </div>
+
+      {detailId !== null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
+          onClick={() => setDetailId(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-slate-800 bg-slate-900 p-6"
+          >
+            {loadingDetail && (
+              <div className="py-10 text-center text-sm text-slate-500">불러오는 중...</div>
+            )}
+
+            {!loadingDetail && !detail && (
+              <div className="py-10 text-center text-sm text-slate-500">
+                상세 정보를 불러오지 못했어요.
+              </div>
+            )}
+
+            {!loadingDetail && detail && detailTranslation && (
+              <>
+                <div className="flex items-start justify-between gap-3">
+                  <h3 className="text-xl font-black">{detailTranslation.name || '이름 없음'}</h3>
+                  <button
+                    type="button"
+                    onClick={() => setDetailId(null)}
+                    className="rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-400 hover:text-white"
+                  >
+                    닫기
+                  </button>
+                </div>
+
+                {detail.category && (
+                  <p className="mt-1 text-xs text-cyan-400">{detail.category.name}</p>
+                )}
+
+                <p className="mt-4 text-sm leading-6 text-slate-300">
+                  {stripHtml(detailTranslation.description) || '이 운동에 대한 설명이 아직 등록되지 않았어요.'}
+                </p>
+
+                {detectSupportedExercise(detailTranslation.name) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const supported = detectSupportedExercise(detailTranslation.name);
+                      if (supported) {
+                        setSelectedExercise(supported);
+                        setDetailId(null);
+                        onStart(supported);
+                      }
+                    }}
+                    className="mt-5 w-full rounded-xl bg-cyan-400 py-3 text-sm font-black text-slate-950"
+                  >
+                    이 운동으로 자세 교정 받기 →
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </main>
+  );
+}
+
+/* ================================================================== */
+/*  AI 자세 코칭 화면 (기존 기능 그대로)                                  */
+/* ================================================================== */
+
+function WorkoutView({
+  initialExercise,
+  onBack,
+}: {
+  initialExercise: ExerciseType;
+  onBack: () => void;
+}) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  const [selectedExercise, setSelectedExercise] = useState<ExerciseType>('PUSHUP');
-  const [targetReps, setTargetReps] = useState(10);
+  const [selectedExercise, setSelectedExercise] = useState<ExerciseType>(initialExercise);
+  const [targetReps, setTargetReps] = useState(
+    EXERCISE_CONFIGS[initialExercise].defaultTarget
+  );
 
   const [isScriptLoaded, setIsScriptLoaded] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState('');
   const [isWorkoutStarted, setIsWorkoutStarted] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -149,7 +842,7 @@ export default function Home() {
   }, [workoutStartTime, isGoalReached]);
 
   useEffect(() => {
-    if (!isGoalReached || !isWorkoutStarted || savedResultRef.current) return;
+    if (!isGoalReached || !isWorkoutStarted || reps <= 0 || goodReps <= 0 || savedResultRef.current) return;
 
     savedResultRef.current = true;
     setLastScore(score);
@@ -240,13 +933,21 @@ export default function Home() {
   };
 
   const handleExerciseChange = (type: ExerciseType) => {
+    if (isWorkoutStartedRef.current) return;
     setSelectedExercise(type);
-    setTargetReps(EXERCISE_CONFIGS[type].defaultTarget);
+    const nextTarget = EXERCISE_CONFIGS[type].defaultTarget;
+    setTargetReps(nextTarget);
+    targetRepsRef.current = nextTarget;
+    setCameraError('');
+    setIsLoaded(false);
     setIsWorkoutStarted(false);
+    setCameraStarted(false);
     resetExerciseState();
   };
 
   const startWorkout = () => {
+    targetRepsRef.current = targetReps;
+    setCameraError('');
     setCameraStarted(true);
     setIsWorkoutStarted(true);
     setWorkoutStartTime(Date.now());
@@ -257,6 +958,7 @@ export default function Home() {
 
   const resetWorkout = () => {
     setIsWorkoutStarted(false);
+    setIsLoaded(false);
     setCameraStarted(false);
     setFeedbackVisible(true);
     resetExerciseState();
@@ -271,8 +973,9 @@ export default function Home() {
   useEffect(() => {
     if (!isScriptLoaded) return;
 
-    let animationFrameId: number;
+    let animationFrameId: number | null = null;
     let poseInstance: any = null;
+    let stream: MediaStream | null = null;
     let isUnmounted = false;
 
     const startPoseTracking = async () => {
@@ -347,41 +1050,22 @@ export default function Home() {
           let isGoodForm = true;
 
           if (shoulder && hip && knee) {
-            if (
-              activeExercise === 'PUSHUP' &&
-              elbow &&
-              wrist
-            ) {
-              activeAngle = getSmoothedAngle(
-                calculateAngle(shoulder, elbow, wrist)
-              );
-
-              currentTorsoAngle = calculateAngle(
-                shoulder,
-                hip,
-                knee
-              );
-
-              if (currentTorsoAngle < config.torsoMinAngle) {
-                isGoodForm = false;
-              }
-            } else if (
-              activeExercise === 'SQUAT' &&
-              ankle
-            ) {
-              activeAngle = getSmoothedAngle(
-                calculateAngle(hip, knee, ankle)
-              );
-
-              currentTorsoAngle = calculateAngle(
-                shoulder,
-                hip,
-                knee
-              );
-
-              if (currentTorsoAngle < config.torsoMinAngle) {
-                isGoodForm = false;
-              }
+            if (activeExercise === 'PUSHUP' && elbow && wrist) {
+              activeAngle = getSmoothedAngle(calculateAngle(shoulder, elbow, wrist));
+              currentTorsoAngle = calculateAngle(shoulder, hip, knee);
+              if (currentTorsoAngle < config.torsoMinAngle) isGoodForm = false;
+            } else if (activeExercise === 'SQUAT' && ankle) {
+              activeAngle = getSmoothedAngle(calculateAngle(hip, knee, ankle));
+              currentTorsoAngle = calculateAngle(shoulder, hip, knee);
+              if (currentTorsoAngle < config.torsoMinAngle) isGoodForm = false;
+            } else if (activeExercise === 'LUNGE' && ankle) {
+              activeAngle = getSmoothedAngle(calculateAngle(hip, knee, ankle));
+              currentTorsoAngle = calculateAngle(shoulder, hip, knee);
+              if (currentTorsoAngle < config.torsoMinAngle) isGoodForm = false;
+            } else if (activeExercise === 'SITUP') {
+              activeAngle = getSmoothedAngle(calculateAngle(shoulder, hip, knee));
+              currentTorsoAngle = activeAngle;
+              if (activeAngle > 155) isGoodForm = false;
             }
 
             setCurrentAngle(activeAngle);
@@ -417,51 +1101,59 @@ export default function Home() {
             if (isWorkoutStartedRef.current && !isGoalReachedRef.current) {
               const now = Date.now();
 
-              if (
-                activeAngle <= config.downThreshold &&
-                !isDownRef.current
-              ) {
-                isDownRef.current = true;
-                downTimestampRef.current = now;
-                wasFormGoodDuringDownRef.current = isGoodForm;
-              }
-
-              if (isDownRef.current && !isGoodForm) {
-                wasFormGoodDuringDownRef.current = false;
-              }
-
-              if (
-                activeAngle >= config.upThreshold &&
-                isDownRef.current &&
-                now - downTimestampRef.current > 200
-              ) {
-                setReps((prev) => prev + 1);
-
-                // 초보자는 자세가 조금 흔들려도 반복은 인정합니다.
-                // 자세의 완성도는 goodReps/점수에서 별도로 평가합니다.
-                if (
-                  wasFormGoodDuringDownRef.current &&
-                  isGoodForm
-                ) {
-                  setGoodReps((prev) => prev + 1);
-                } else {
-                  // 완전히 잘못된 동작이 아니라면 운동 횟수는 인정합니다.
-                  // 초보자도 운동 흐름이 끊기지 않도록 합니다.
-                  setGoodReps((prev) => prev + 1);
+              if (activeExercise === 'JUMPING_JACK') {
+                const armsUp = wrist && shoulder && wrist.y < shoulder.y - 0.12;
+                const legsOpen = Math.abs((lm[27]?.x ?? 0) - (lm[28]?.x ?? 0)) > 0.28;
+                const jumpingOpen = !!armsUp && legsOpen;
+                if (jumpingOpen && !isDownRef.current) {
+                  isDownRef.current = true;
+                  downTimestampRef.current = now;
+                  wasFormGoodDuringDownRef.current = true;
                 }
+                if (isDownRef.current && !jumpingOpen && now - downTimestampRef.current > 200) {
+                  setReps((prev) => prev + 1);
+                  setGoodReps((prev) => prev + 1);
+                  isDownRef.current = false;
+                }
+              } else {
+                const downCondition = activeExercise === 'SITUP'
+                  ? activeAngle <= config.upThreshold
+                  : activeAngle <= config.downThreshold;
+                const upCondition = activeExercise === 'SITUP'
+                  ? activeAngle >= config.downThreshold
+                  : activeAngle >= config.upThreshold;
 
-                isDownRef.current = false;
+                if (downCondition && !isDownRef.current) {
+                  isDownRef.current = true;
+                  downTimestampRef.current = now;
+                  wasFormGoodDuringDownRef.current = isGoodForm;
+                }
+                if (isDownRef.current && !isGoodForm) wasFormGoodDuringDownRef.current = false;
+
+                if (upCondition && isDownRef.current && now - downTimestampRef.current > 200) {
+                  setReps((prev) => prev + 1);
+                  setGoodReps((prev) => prev + 1);
+                  isDownRef.current = false;
+                }
               }
 
               const nextFeedback = !stableFormRef.current
                 ? activeExercise === 'PUSHUP'
-                  ? '거의 좋아요! 허리와 엉덩이를 조금 더 일직선으로 유지해보세요.'
-                  : '거의 좋아요! 가슴을 조금 더 펴고 천천히 내려가보세요.'
-                : activeAngle <= config.downThreshold
-                  ? '좋아요! 충분히 내려갔어요.'
-                  : activeAngle >= config.upThreshold
-                    ? '🟢 좋아요! 한 번 완료됐어요.'
-                    : config.guideText;
+                  ? '거의 좋아요! 허리와 엉덩이를 일직선으로 유지해보세요.'
+                  : activeExercise === 'SQUAT'
+                    ? '거의 좋아요! 가슴을 펴고 천천히 내려가보세요.'
+                    : activeExercise === 'LUNGE'
+                      ? '앞쪽 무릎을 천천히 굽히고 상체를 세워보세요.'
+                      : activeExercise === 'SITUP'
+                        ? '복부에 힘을 주고 천천히 상체를 움직여보세요.'
+                        : '팔과 다리를 충분히 벌려주세요.'
+                : activeExercise === 'JUMPING_JACK'
+                  ? '🟢 팔과 다리를 모았다가 다시 크게 벌려보세요.'
+                  : activeAngle <= config.downThreshold
+                    ? '좋아요! 충분히 내려갔어요.'
+                    : activeAngle >= config.upThreshold
+                      ? '🟢 좋아요! 한 번 완료됐어요.'
+                      : config.guideText;
 
               // 같은 문구가 반복되는 동안에는 React state를 건드리지 않습니다.
               // 문구가 실제로 바뀔 때만 한 번 변경합니다.
@@ -528,17 +1220,30 @@ export default function Home() {
           });
         });
 
-        const stream =
-          await navigator.mediaDevices.getUserMedia({
-            video: {
-              width: 640,
-              height: 480,
-              facingMode: 'user',
-            },
-          });
+        if (!navigator.mediaDevices?.getUserMedia) {
+          throw new Error('이 브라우저에서는 카메라 기능을 사용할 수 없습니다.');
+        }
+
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 640, max: 1280 },
+            height: { ideal: 480, max: 720 },
+            facingMode: { ideal: 'user' },
+          },
+          audio: false,
+        });
+
+        if (isUnmounted) {
+          stream.getTracks().forEach((track) => track.stop());
+          stream = null;
+          return;
+        }
 
         videoElement.srcObject = stream;
+        videoElement.muted = true;
+        videoElement.playsInline = true;
         await videoElement.play();
+        if (!isUnmounted) setCameraReady(true);
 
         const processFrame = async () => {
           if (isUnmounted) return;
@@ -561,11 +1266,21 @@ export default function Home() {
         };
 
         processFrame();
-      } catch (err) {
+      } catch (err: any) {
+        if (isUnmounted) return;
         console.error('카메라/AI 로딩 오류:', err);
-        setCameraError(
-          '카메라를 사용할 수 없습니다. 브라우저의 카메라 권한을 확인해주세요.'
-        );
+        if (err?.name === 'NotReadableError') {
+          setCameraError('카메라를 다른 앱이나 브라우저 탭에서 사용 중일 수 있습니다. 다른 카메라 사용 프로그램을 닫고 다시 연결해주세요.');
+        } else if (err?.name === 'NotAllowedError') {
+          setCameraError('카메라 권한이 차단되어 있습니다. 브라우저 사이트 설정에서 카메라 권한을 허용해주세요.');
+        } else if (err?.name === 'NotFoundError') {
+          setCameraError('사용할 수 있는 카메라를 찾지 못했습니다. 카메라가 연결되어 있는지 확인해주세요.');
+        } else {
+          setCameraError('카메라를 사용할 수 없습니다. 브라우저의 카메라 권한과 다른 카메라 사용 프로그램을 확인해주세요.');
+        }
+        setCameraReady(false);
+        setCameraStarted(false);
+        setIsWorkoutStarted(false);
       }
     };
 
@@ -574,7 +1289,7 @@ export default function Home() {
     return () => {
       isUnmounted = true;
 
-      if (animationFrameId) {
+      if (animationFrameId !== null) {
         cancelAnimationFrame(animationFrameId);
       }
 
@@ -582,33 +1297,36 @@ export default function Home() {
         poseInstance.close();
       }
 
-      if (
-        videoRef.current &&
-        videoRef.current.srcObject
-      ) {
-        const stream =
-          videoRef.current.srcObject as MediaStream;
-
+      if (stream) {
         stream.getTracks().forEach((track) => track.stop());
+        stream = null;
+      }
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
       }
     };
   }, [isScriptLoaded]);
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white font-sans">
+    <main className="min-h-screen overflow-hidden bg-[#07090d] text-white font-sans selection:bg-cyan-400/30">
       <Script
         src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"
         strategy="afterInteractive"
         onLoad={() => setIsScriptLoaded(true)}
       />
 
-      <header className="mx-auto flex max-w-6xl items-center justify-between px-5 py-5">
+      <header className="mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-8">
         <div>
-          <h1 className="text-2xl font-black tracking-tight text-cyan-400">
+          <button
+            onClick={onBack}
+            className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[10px] font-black tracking-wide text-slate-400 transition hover:border-cyan-400/30 hover:text-cyan-300"
+          >
+            ← 운동 목록으로
+          </button>
+          <h1 className="text-2xl font-black tracking-tight text-white">
             ChoWiFit
-            <span className="ml-2 text-xs font-medium text-slate-500">
-              | AI Motion Coach
-            </span>
+            <span className="ml-2 rounded-full bg-cyan-400/10 px-2.5 py-1 text-[9px] font-black text-cyan-300">LIVE AI</span>
           </h1>
           <p className="mt-1 text-xs text-slate-400">
             AI가 운동 자세를 실시간으로 분석해드립니다.
@@ -617,25 +1335,37 @@ export default function Home() {
 
         <button
           onClick={() => setShowHistory((prev) => !prev)}
-          className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-bold text-slate-200 transition hover:border-cyan-500 hover:text-cyan-400"
+          className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-xs font-bold text-slate-200 transition hover:border-cyan-400/30 hover:text-cyan-300"
         >
           📊 운동 기록
         </button>
       </header>
 
-      <div className="mx-auto grid max-w-6xl gap-5 px-4 pb-10 lg:grid-cols-[1fr_300px]">
+      <div className="mx-auto grid max-w-7xl gap-5 px-4 pb-10 sm:px-8 lg:grid-cols-[minmax(0,1fr)_320px]">
         <section>
-          <div className="mb-4 rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
+          <div className="mb-4 overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/[0.035] shadow-[0_20px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+            <div className="flex items-center justify-between border-b border-white/5 px-4 py-3 sm:px-5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-300/10 text-2xl">{config.icon}</div>
+                <div>
+                  <p className="text-[9px] font-black tracking-[0.18em] text-cyan-300">WORKOUT SESSION</p>
+                  <h2 className="mt-0.5 text-base font-black sm:text-lg">{config.shortName}</h2>
+                </div>
+              </div>
+              <div className="rounded-full border border-emerald-400/20 bg-emerald-400/5 px-2.5 py-1 text-[9px] font-black text-emerald-300">AI COACH</div>
+            </div>
+            <div className="p-4 sm:p-5">
             <div className="mb-4 grid grid-cols-2 gap-3">
               {(Object.keys(EXERCISE_CONFIGS) as ExerciseType[]).map(
                 (type) => (
                   <button
                     key={type}
                     onClick={() => handleExerciseChange(type)}
-                    className={`rounded-2xl border p-4 text-left transition ${
+                    disabled={isWorkoutStarted}
+                    className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition duration-300 hover:-translate-y-1 ${
                       selectedExercise === type
-                        ? 'border-cyan-400 bg-cyan-400/10 shadow-[0_0_25px_rgba(0,255,204,0.08)]'
-                        : 'border-slate-800 bg-slate-950 hover:border-slate-600'
+                        ? 'border-cyan-300/70 bg-cyan-400/10 shadow-[0_20px_50px_rgba(0,255,204,0.10)]'
+                        : 'border-white/10 bg-black/20 hover:border-white/20 hover:bg-white/[0.045]'
                     }`}
                   >
                     <div className="text-2xl">
@@ -659,12 +1389,12 @@ export default function Home() {
                 </p>
                 <div className="mt-1 flex items-center gap-2">
                   <button
-                    onClick={() =>
-                      setTargetReps((prev) =>
-                        Math.max(1, prev - 1)
-                      )
-                    }
-                    className="h-9 w-9 rounded-xl bg-slate-800 text-lg font-black text-cyan-400 hover:bg-slate-700"
+                    onClick={() => {
+                      if (isWorkoutStarted) return;
+                      setTargetReps((prev) => Math.max(1, prev - 1));
+                    }}
+                    disabled={isWorkoutStarted}
+                    className={`h-9 w-9 rounded-xl bg-slate-800 text-lg font-black text-cyan-400 hover:bg-slate-700 ${isWorkoutStarted ? 'cursor-not-allowed opacity-50' : ''}`}
                   >
                     -
                   </button>
@@ -672,10 +1402,12 @@ export default function Home() {
                     {targetReps}
                   </span>
                   <button
-                    onClick={() =>
-                      setTargetReps((prev) => prev + 1)
-                    }
-                    className="h-9 w-9 rounded-xl bg-slate-800 text-lg font-black text-cyan-400 hover:bg-slate-700"
+                    onClick={() => {
+                      if (isWorkoutStarted) return;
+                      setTargetReps((prev) => prev + 1);
+                    }}
+                    disabled={isWorkoutStarted}
+                    className={`h-9 w-9 rounded-xl bg-slate-800 text-lg font-black text-cyan-400 hover:bg-slate-700 ${isWorkoutStarted ? 'cursor-not-allowed opacity-50' : ''}`}
                   >
                     +
                   </button>
@@ -691,12 +1423,13 @@ export default function Home() {
                 </p>
               </div>
             </div>
+            </div>
           </div>
 
-          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-3xl border-2 border-cyan-500/30 bg-slate-900 shadow-[0_0_35px_rgba(0,255,204,0.12)]">
+          <div className="group relative aspect-[4/3] w-full overflow-hidden rounded-[2rem] border border-white/10 bg-black shadow-[0_30px_100px_rgba(0,0,0,0.55)] ring-1 ring-cyan-300/5">
             <video
               ref={videoRef}
-              className="absolute left-0 top-0 h-full w-full object-cover"
+              className="absolute left-0 top-0 h-full w-full scale-x-[-1] object-cover transition-transform duration-700 group-hover:scale-[1.015]"
               playsInline
               muted
             />
@@ -705,20 +1438,26 @@ export default function Home() {
               ref={canvasRef}
               width={640}
               height={480}
-              className="absolute left-0 top-0 h-full w-full"
+              className="absolute left-0 top-0 h-full w-full scale-x-[-1]"
             />
 
-            {!isLoaded && !cameraError && (
+            {!cameraReady && !cameraError && (
               <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/90">
                 <div className="text-center">
                   <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-slate-700 border-t-cyan-400" />
                   <p className="font-bold text-cyan-400">
-                    AI 자세 분석 준비 중...
+                    카메라 연결 중...
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
                     카메라 권한을 허용해주세요.
                   </p>
                 </div>
+              </div>
+            )}
+
+            {cameraReady && !isLoaded && !cameraError && (
+              <div className="absolute left-3 top-3 z-30 rounded-xl border border-amber-400/30 bg-slate-950/85 px-3 py-2 text-[10px] font-bold text-amber-300 backdrop-blur">
+                🤖 AI 자세 분석 연결 중...
               </div>
             )}
 
@@ -742,10 +1481,22 @@ export default function Home() {
               </div>
             )}
 
-            {isLoaded && (
+            {cameraReady && (
               <>
-                <div className="absolute left-3 right-3 top-3 z-20 flex items-start justify-between gap-2">
-                  <div className="rounded-xl border border-cyan-500/40 bg-slate-950/85 px-3 py-1.5 backdrop-blur sm:rounded-2xl sm:px-5 sm:py-2">
+                <div className="pointer-events-none absolute inset-0 z-10">
+                  <div className="absolute left-1/2 top-4 h-2 w-2 -translate-x-1/2 rounded-full bg-cyan-300 shadow-[0_0_18px_rgba(103,232,249,0.9)]" />
+                  <div className="absolute inset-x-1/2 bottom-0 top-0 w-px -translate-x-1/2 bg-white/5" />
+                  <div className="absolute bottom-0 left-0 h-px w-full bg-white/5" />
+                  <div className="absolute left-4 top-1/2 h-16 w-px -translate-y-1/2 bg-cyan-300/30" />
+                  <div className="absolute right-4 top-1/2 h-16 w-px -translate-y-1/2 bg-cyan-300/30" />
+                </div>
+
+                <div className="absolute left-3 top-3 z-20 rounded-full border border-white/10 bg-black/45 px-3 py-1.5 text-[9px] font-black tracking-[0.18em] text-white/75 backdrop-blur-xl sm:left-5 sm:top-5">
+                  {config.shortName.toUpperCase()} · LIVE
+                </div>
+
+                <div className="absolute left-3 right-3 top-12 z-20 flex items-start justify-between gap-2 sm:left-5 sm:right-5 sm:top-16">
+                  <div className="rounded-2xl border border-white/10 bg-black/50 px-3 py-2 shadow-[0_8px_30px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:px-5 sm:py-3">
                     <p className="text-[9px] font-black tracking-widest text-cyan-400">
                       CURRENT REPS
                     </p>
@@ -755,6 +1506,12 @@ export default function Home() {
                       </span>
                       <span className="text-sm text-slate-500"> / {targetReps}</span>
                     </p>
+                    <div className="mt-2 h-1.5 w-24 overflow-hidden rounded-full bg-white/10 sm:w-32">
+                      <div
+                        className="h-full rounded-full bg-cyan-300 shadow-[0_0_14px_rgba(103,232,249,0.55)] transition-all duration-500"
+                        style={{ width: `${Math.min(100, (goodReps / Math.max(1, targetReps)) * 100)}%` }}
+                      />
+                    </div>
                   </div>
 
                   <div
@@ -770,8 +1527,8 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="absolute bottom-3 left-3 right-3 z-20">
-                  <div className="mb-2 rounded-xl border border-slate-700 bg-slate-950/85 px-4 py-2 backdrop-blur">
+                <div className="absolute bottom-3 left-3 right-3 z-20 sm:bottom-5 sm:left-5 sm:right-5">
+                  <div className="mb-2 rounded-2xl border border-white/10 bg-black/55 px-4 py-3 shadow-[0_10px_35px_rgba(0,0,0,0.35)] backdrop-blur-xl">
                     <p
                       className="text-xs font-black text-white transition-none opacity-100 sm:text-sm"
                     >
@@ -780,21 +1537,21 @@ export default function Home() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <div className="rounded-xl bg-slate-950/90 px-3 py-2 backdrop-blur">
+                    <div className="rounded-2xl border border-white/10 bg-black/60 px-3 py-2.5 backdrop-blur-xl">
                       <p className="text-[9px] font-bold text-slate-500">TIME</p>
                       <p className="text-sm font-black">
                         {formatTime(elapsedSeconds)}
                       </p>
                     </div>
 
-                    <div className="rounded-xl bg-slate-950/90 px-3 py-2 backdrop-blur">
+                    <div className="rounded-2xl border border-white/10 bg-black/60 px-3 py-2.5 backdrop-blur-xl">
                       <p className="text-[9px] font-bold text-cyan-400">POSTURE</p>
                       <p className="text-sm font-black text-cyan-400">
                         {isGoodFormUI ? '좋아요' : '조금만 수정'}
                       </p>
                     </div>
 
-                    <div className="ml-auto rounded-xl bg-slate-950/80 px-3 py-2 text-right backdrop-blur">
+                    <div className="ml-auto hidden rounded-2xl border border-white/10 bg-black/55 px-3 py-2.5 text-right backdrop-blur-xl sm:block">
                       <p className="text-[9px] font-bold text-slate-500">TIP</p>
                       <p className="hidden max-w-[150px] truncate text-[10px] text-slate-300 sm:block">
                         {config.guideText}
@@ -804,21 +1561,22 @@ export default function Home() {
                 </div>
 
                 {!isWorkoutStarted && !isGoalReached && (
-                  <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/75 p-5 backdrop-blur-sm">
-                    <div className="w-full max-w-md rounded-3xl border border-slate-700 bg-slate-900/95 p-7 text-center shadow-2xl">
+                  <div className="absolute inset-0 z-30 flex items-center justify-center bg-[#05070a]/70 p-5 backdrop-blur-md">
+                    <div className="w-full max-w-md rounded-[2rem] border border-white/10 bg-[#090d13]/95 p-6 text-center shadow-[0_30px_100px_rgba(0,0,0,0.65)] sm:p-8">
                       <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-cyan-400/10 text-4xl">
                         {config.icon}
                       </div>
 
-                      <p className="mt-5 text-xs font-black tracking-widest text-cyan-400">
+                      <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/5 px-3 py-1.5 text-[9px] font-black tracking-[0.18em] text-cyan-300">
+                        <span className="h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(103,232,249,0.9)]" />
                         READY TO WORKOUT
-                      </p>
+                      </div>
                       <h2 className="mt-2 text-2xl font-black">
                         {config.shortName}
                       </h2>
 
-                      <div className="mt-5 rounded-2xl bg-slate-950 p-4">
-                        <p className="text-xs text-slate-500">오늘의 목표</p>
+                      <div className="mt-5 rounded-2xl border border-white/5 bg-black/25 p-4">
+                        <p className="text-[10px] font-black tracking-widest text-slate-500">TODAY'S TARGET</p>
                         <p className="mt-1 text-3xl font-black text-white">
                           {targetReps}
                           <span className="ml-1 text-sm text-slate-500">회</span>
@@ -840,9 +1598,9 @@ export default function Home() {
 
                       <button
                         onClick={startWorkout}
-                        className="mt-5 w-full rounded-2xl bg-cyan-400 py-3.5 font-black text-slate-950 shadow-[0_0_25px_rgba(0,255,204,0.2)] transition hover:bg-cyan-300"
+                        className="mt-5 w-full rounded-2xl bg-white py-3.5 font-black text-slate-950 shadow-[0_12px_40px_rgba(255,255,255,0.10)] transition hover:-translate-y-0.5 hover:bg-cyan-200"
                       >
-                        카메라 시작하고 운동하기 →
+                        운동 시작하기 →
                       </button>
                     </div>
                   </div>
@@ -931,7 +1689,7 @@ export default function Home() {
         </section>
 
         <aside className="space-y-4">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+          <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.035] p-5 shadow-[0_18px_55px_rgba(0,0,0,0.20)] backdrop-blur-xl">
             <p className="text-xs font-black tracking-widest text-cyan-400">
               LIVE ANALYSIS
             </p>
@@ -940,13 +1698,16 @@ export default function Home() {
             </h2>
 
             <div className="mt-4 space-y-3">
-              <div className="flex items-center justify-between rounded-xl bg-slate-950 p-3">
-                <span className="text-xs text-slate-400">
-                  AI 상태
-                </span>
-                <span className="text-xs font-bold text-emerald-400">
-                  {isLoaded ? '● 연결됨' : '● 준비 중'}
-                </span>
+              <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black tracking-widest text-slate-500">AI ANALYSIS</span>
+                  <span className={`rounded-full px-2 py-1 text-[9px] font-black ${isLoaded ? 'bg-emerald-400/10 text-emerald-300' : 'bg-amber-400/10 text-amber-300'}`}>
+                    {isLoaded ? '● LIVE' : '● 준비 중'}
+                  </span>
+                </div>
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/5">
+                  <div className={`h-full rounded-full transition-all duration-500 ${isLoaded ? 'w-full bg-cyan-300 shadow-[0_0_18px_rgba(103,232,249,0.55)]' : 'w-1/3 bg-amber-300'}`} />
+                </div>
               </div>
 
               <div className="flex items-center justify-between rounded-xl bg-slate-950 p-3">
@@ -973,7 +1734,7 @@ export default function Home() {
                 </span>
               </div>
 
-              <div className="rounded-xl bg-slate-950 p-3">
+              <div className="rounded-2xl border border-white/5 bg-black/20 p-3">
                 <p className="text-[10px] font-bold text-slate-500">
                   COACHING TIP
                 </p>
@@ -985,7 +1746,7 @@ export default function Home() {
           </div>
 
           {showHistory ? (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+            <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.035] p-5 shadow-[0_18px_55px_rgba(0,0,0,0.20)] backdrop-blur-xl">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-black tracking-widest text-cyan-400">
@@ -1018,7 +1779,7 @@ export default function Home() {
                   history.map((record) => (
                     <div
                       key={record.id}
-                      className="rounded-xl bg-slate-950 p-3"
+                      className="rounded-2xl border border-white/5 bg-black/20 p-3"
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-black">
@@ -1043,7 +1804,7 @@ export default function Home() {
               </div>
             </div>
           ) : (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+            <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.035] p-5 shadow-[0_18px_55px_rgba(0,0,0,0.20)] backdrop-blur-xl">
               <p className="text-xs font-black tracking-widest text-cyan-400">
                 HOW IT WORKS
               </p>
@@ -1053,7 +1814,7 @@ export default function Home() {
 
               <div className="mt-4 space-y-3">
                 {[
-                  ['01', '운동 선택', '푸시업 또는 스쿼트를 선택하세요.'],
+                  ['01', '운동 선택', '운동 목록에서 원하는 운동을 선택하세요.'],
                   ['02', '카메라 확인', '몸 전체가 화면에 보이도록 위치하세요.'],
                   ['03', 'AI 분석', '관절 움직임과 자세를 실시간 분석합니다.'],
                   ['04', '결과 확인', '횟수와 자세 점수를 확인하세요.'],
@@ -1097,5 +1858,32 @@ export default function Home() {
         </aside>
       </div>
     </main>
+  );
+}
+
+/* ================================================================== */
+/*  최상위 컴포넌트: 목록 화면 ↔ AI 코칭 화면 전환                         */
+/* ================================================================== */
+
+export default function Home() {
+  const [view, setView] = useState<'catalog' | 'workout'>('catalog');
+  const [startExercise, setStartExercise] = useState<ExerciseType>('PUSHUP');
+
+  if (view === 'workout') {
+    return (
+      <WorkoutView
+        initialExercise={startExercise}
+        onBack={() => setView('catalog')}
+      />
+    );
+  }
+
+  return (
+    <CatalogView
+      onStart={(type) => {
+        setStartExercise(type);
+        setView('workout');
+      }}
+    />
   );
 }
