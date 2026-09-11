@@ -433,6 +433,190 @@ async function fetchJson<T>(url: string): Promise<T> {
 /*  운동 목록 화면                                                      */
 /* ================================================================== */
 
+
+function MotionStyles() {
+  return (
+    <style jsx global>{`
+      @keyframes auroraFloat {
+        0%, 100% { transform: translate3d(0, 0, 0) scale(1); opacity: .35; }
+        50% { transform: translate3d(24px, -16px, 0) scale(1.08); opacity: .62; }
+      }
+      @keyframes auroraFloat2 {
+        0%, 100% { transform: translate3d(0, 0, 0) scale(1); opacity: .22; }
+        50% { transform: translate3d(-26px, 18px, 0) scale(1.12); opacity: .48; }
+      }
+      @keyframes shimmer {
+        0% { transform: translateX(-140%) skewX(-18deg); opacity: 0; }
+        12% { opacity: .55; }
+        100% { transform: translateX(340%) skewX(-18deg); opacity: 0; }
+      }
+      @keyframes pulseGlow {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(34,211,238,0), 0 0 22px rgba(34,211,238,.06); }
+        50% { box-shadow: 0 0 0 7px rgba(34,211,238,.025), 0 0 40px rgba(34,211,238,.16); }
+      }
+      @keyframes dotPulse {
+        0%, 100% { transform: scale(.8); opacity: .55; }
+        50% { transform: scale(1.3); opacity: 1; }
+      }
+      @keyframes floatCard {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-4px); }
+      }
+      @keyframes revealUp {
+        0% { opacity: 0; transform: translateY(14px); }
+        100% { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes popIn {
+        0% { opacity: 0; transform: scale(.82); }
+        72% { opacity: 1; transform: scale(1.08); }
+        100% { opacity: 1; transform: scale(1); }
+      }
+      @keyframes scanLine {
+        0% { transform: translateY(-120%); opacity: 0; }
+        10% { opacity: .5; }
+        90% { opacity: .5; }
+        100% { transform: translateY(120%); opacity: 0; }
+      }
+      @keyframes borderPulse {
+        0%, 100% { opacity: .42; }
+        50% { opacity: 1; }
+      }
+      @keyframes spinSlow {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      @keyframes progressSweep {
+        0% { transform: translateX(-140%); }
+        100% { transform: translateX(340%); }
+      }
+      @keyframes orbit {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      @keyframes orbitReverse {
+        from { transform: rotate(360deg); }
+        to { transform: rotate(0deg); }
+      }
+      @keyframes neonBreath {
+        0%, 100% { opacity: .45; transform: scale(.98); }
+        50% { opacity: 1; transform: scale(1.02); }
+      }
+      @keyframes scanGlow {
+        0%, 100% { opacity: .18; }
+        50% { opacity: .8; }
+      }
+      @keyframes slideShine {
+        0% { left: -40%; opacity: 0; }
+        15% { opacity: .65; }
+        100% { left: 130%; opacity: 0; }
+      }
+      @keyframes numberPunch {
+        0% { transform: scale(.88); opacity: .5; }
+        55% { transform: scale(1.08); opacity: 1; }
+        100% { transform: scale(1); opacity: 1; }
+      }
+      @keyframes cardEnter {
+        0% { opacity: 0; transform: translateY(18px) scale(.985); }
+        100% { opacity: 1; transform: translateY(0) scale(1); }
+      }
+      .cf-orbit { animation: orbit 16s linear infinite; }
+      .cf-orbit-reverse { animation: orbitReverse 21s linear infinite; }
+      .cf-breathe { animation: neonBreath 3s ease-in-out infinite; }
+      .cf-scan-glow { animation: scanGlow 2.4s ease-in-out infinite; }
+      .cf-number { animation: numberPunch .36s cubic-bezier(.22,1,.36,1); }
+      .cf-enter { animation: cardEnter .6s cubic-bezier(.22,1,.36,1) both; }
+      .cf-premium-card {
+        position: relative;
+        overflow: hidden;
+        isolation: isolate;
+      }
+      .cf-premium-card::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        padding: 1px;
+        background: linear-gradient(135deg, rgba(103,232,249,.35), transparent 34%, transparent 66%, rgba(59,130,246,.22));
+        -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+        -webkit-mask-composite: xor;
+        mask-composite: exclude;
+        pointer-events: none;
+      }
+      .cf-premium-card::after {
+        content: '';
+        position: absolute;
+        width: 32%;
+        height: 100%;
+        top: 0;
+        left: -40%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,.14), transparent);
+        transform: skewX(-16deg);
+        animation: slideShine 5s ease-in-out infinite;
+        pointer-events: none;
+      }
+      .cf-camera-frame {
+        position: relative;
+        box-shadow: 0 25px 80px rgba(0,0,0,.55), 0 0 0 1px rgba(103,232,249,.08), inset 0 0 50px rgba(34,211,238,.04);
+      }
+      .cf-camera-frame::before {
+        content: '';
+        position: absolute;
+        inset: 10px;
+        border-radius: 24px;
+        border: 1px solid rgba(103,232,249,.08);
+        pointer-events: none;
+        z-index: 8;
+      }
+      .cf-grid-overlay {
+        background-image: linear-gradient(rgba(103,232,249,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(103,232,249,.06) 1px, transparent 1px);
+        background-size: 32px 32px;
+        mask-image: linear-gradient(to bottom, transparent, #000 24%, #000 76%, transparent);
+      }
+      .cf-glass {
+        background: linear-gradient(180deg, rgba(15,23,42,.58), rgba(2,6,23,.48));
+        backdrop-filter: blur(18px);
+      }
+      .cf-shadow-text { text-shadow: 0 0 30px rgba(34,211,238,.16); }
+      .cf-aurora { animation: auroraFloat 7s ease-in-out infinite; }
+      .cf-aurora-2 { animation: auroraFloat2 9s ease-in-out infinite; }
+      .cf-float { animation: floatCard 5s ease-in-out infinite; }
+      .cf-reveal { animation: revealUp .55s cubic-bezier(.22,1,.36,1) both; }
+      .cf-pop { animation: popIn .42s cubic-bezier(.22,1,.36,1) both; }
+      .cf-pulse { animation: pulseGlow 2.8s ease-in-out infinite; }
+      .cf-dot { animation: dotPulse 1.6s ease-in-out infinite; }
+      .cf-scan { animation: scanLine 3.8s ease-in-out infinite; }
+      .cf-border-pulse { animation: borderPulse 2.2s ease-in-out infinite; }
+      .cf-spin { animation: spinSlow 12s linear infinite; }
+      .cf-shimmer { position: relative; overflow: hidden; }
+      .cf-shimmer::after {
+        content: '';
+        position: absolute;
+        inset: 0 auto 0 -28%;
+        width: 24%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,.32), transparent);
+        animation: shimmer 3.2s ease-in-out infinite;
+        pointer-events: none;
+      }
+      .cf-progress { position: relative; overflow: hidden; }
+      .cf-progress::after {
+        content: '';
+        position: absolute;
+        inset: 0 auto 0 -42%;
+        width: 34%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,.25), transparent);
+        animation: progressSweep 2.6s ease-in-out infinite;
+        pointer-events: none;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .cf-aurora, .cf-aurora-2, .cf-float, .cf-reveal, .cf-pop, .cf-pulse,
+        .cf-dot, .cf-scan, .cf-border-pulse, .cf-spin, .cf-shimmer::after,
+        .cf-progress::after, .cf-orbit, .cf-orbit-reverse, .cf-breathe, .cf-scan-glow,
+        .cf-number, .cf-enter, .cf-premium-card::after { animation: none !important; }
+      }
+    `}</style>
+  );
+}
+
 function CatalogView({
   onStart,
 }: {
@@ -608,22 +792,26 @@ function CatalogView({
   };
 
   return (
-    <main className="min-h-screen bg-[#07090d] text-white font-sans selection:bg-cyan-400/30">
+    <main className="relative min-h-screen overflow-x-hidden bg-[#05070b] text-white font-sans selection:bg-cyan-400/30">
+      <MotionStyles />
+      <div className="pointer-events-none absolute inset-0 opacity-30 [background-image:radial-gradient(circle_at_20%_0%,rgba(34,211,238,.10),transparent_28%),radial-gradient(circle_at_90%_22%,rgba(59,130,246,.10),transparent_25%)]" />
+      <div className="pointer-events-none absolute -left-24 top-16 h-72 w-72 rounded-full bg-cyan-400/10 blur-[105px] cf-aurora" />
+      <div className="pointer-events-none absolute right-[-90px] top-[28rem] h-80 w-80 rounded-full bg-blue-500/10 blur-[110px] cf-aurora-2" />
       <header className="relative mx-auto max-w-7xl px-5 pb-5 pt-8 sm:px-8 sm:pt-10">
-        <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 shadow-[0_0_30px_rgba(34,211,238,0.06)]"><span className="h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(103,232,249,0.8)]" /><span className="text-[10px] font-black tracking-[0.24em] text-cyan-300">CHOWIFIT AI FITNESS</span></div>
-        <h1 className="mt-5 max-w-3xl text-4xl font-black leading-[1.05] tracking-[-0.04em] sm:text-6xl">
+        <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-white/[0.04] px-3 py-1.5 shadow-[0_0_30px_rgba(34,211,238,0.06)] cf-pulse"><span className="h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(103,232,249,0.8)] cf-dot" /><span className="text-[10px] font-black tracking-[0.24em] text-cyan-300">CHOWIFIT AI FITNESS</span></div>
+        <h1 className="mt-5 max-w-3xl cf-reveal cf-shadow-text text-4xl font-black leading-[1.05] tracking-[-0.04em] sm:text-6xl">
           오늘의 운동을
           <span className="block bg-gradient-to-r from-cyan-300 via-white to-cyan-100 bg-clip-text text-transparent">더 정확하게.</span>
         </h1>
-        <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-400 sm:text-base">AI가 카메라 속 움직임을 실시간으로 분석해요. 운동을 고르고 목표 횟수만 설정하면 바로 시작할 수 있어요.</p>
-        <div className="mt-6 flex flex-wrap gap-2 text-[10px] font-bold text-slate-400"><span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5">LIVE POSE</span><span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5">REAL-TIME FEEDBACK</span><span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5">WORKOUT HISTORY</span></div>
+        <p className="mt-4 max-w-2xl text-sm cf-reveal leading-6 text-slate-400 sm:text-base">AI가 카메라 속 움직임을 실시간으로 분석해요. 운동을 고르고 목표 횟수만 설정하면 바로 시작할 수 있어요.</p>
+        <div className="mt-6 flex flex-wrap gap-2 text-[10px] font-bold text-slate-400 cf-reveal"><span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5">LIVE POSE</span><span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5">REAL-TIME FEEDBACK</span><span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5">WORKOUT HISTORY</span></div>
       </header>
 
       <div className="relative mx-auto max-w-7xl px-4 pb-16 sm:px-8"><div className="pointer-events-none absolute -top-20 left-1/4 h-72 w-72 rounded-full bg-cyan-400/10 blur-[110px]" /><div className="pointer-events-none absolute right-0 top-80 h-64 w-64 rounded-full bg-blue-500/10 blur-[100px]" />
         {/* ============================================================ */}
         {/* AI 자세 교정 운동 */}
         {/* ============================================================ */}
-        <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.035] p-5 shadow-[0_25px_80px_rgba(0,0,0,0.32)] backdrop-blur-xl sm:p-7">
+        <section className="cf-premium-card relative overflow-hidden rounded-[2rem] border border-cyan-300/10 bg-white/[0.035] p-5 shadow-[0_25px_90px_rgba(0,0,0,0.34)] backdrop-blur-xl sm:p-7 cf-reveal">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5"><span className="text-[9px] font-black tracking-[0.2em] text-cyan-300">AI POSTURE COACH</span><span className="h-1 w-1 rounded-full bg-cyan-300" /></div>
@@ -654,7 +842,7 @@ function CatalogView({
                   key={ex.type}
                   type="button"
                   onClick={() => setSelectedExercise(ex.type)}
-                  className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition duration-300 hover:-translate-y-1 ${
+                  className={`cf-premium-card group relative overflow-hidden rounded-2xl border p-4 text-left transition duration-300 hover:-translate-y-1 hover:scale-[1.015] ${
                     selected
                       ? 'border-cyan-300/70 bg-cyan-400/10 shadow-[0_20px_50px_rgba(0,255,204,0.10)]'
                       : 'border-white/10 bg-black/20 hover:border-white/20 hover:bg-white/[0.045]'
@@ -687,7 +875,7 @@ function CatalogView({
             <button
               type="button"
               onClick={() => onStart(selectedExercise)}
-              className="rounded-2xl bg-white px-6 py-3.5 font-black text-slate-950 shadow-[0_10px_40px_rgba(255,255,255,0.08)] transition hover:-translate-y-0.5 hover:bg-cyan-200"
+              className="cf-shimmer rounded-2xl bg-white px-6 py-3.5 font-black text-slate-950 shadow-[0_10px_40px_rgba(255,255,255,0.08)] transition hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-cyan-200"
             >
               자세 교정 받기 →
             </button>
@@ -1514,7 +1702,10 @@ function WorkoutView({
   }, [isScriptLoaded]);
 
   return (
-    <main className="min-h-screen bg-[#07090d] text-white font-sans selection:bg-cyan-400/30">
+    <main className="relative min-h-screen overflow-x-hidden bg-[#07090d] text-white font-sans selection:bg-cyan-400/30">
+      <MotionStyles />
+      <div className="pointer-events-none absolute -left-16 top-16 h-72 w-72 rounded-full bg-cyan-400/10 blur-[100px] cf-aurora" />
+      <div className="pointer-events-none absolute right-[-100px] top-[26rem] h-96 w-96 rounded-full bg-blue-500/10 blur-[120px] cf-aurora-2" />
       <Script
         src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"
         strategy="afterInteractive"
@@ -1679,7 +1870,10 @@ function WorkoutView({
             </div>
           </div>
 
-          <div className="group relative aspect-[4/3] w-full overflow-hidden rounded-[1.35rem] border border-white/10 bg-black shadow-[0_30px_100px_rgba(0,0,0,0.55)] ring-1 ring-cyan-300/5 md:aspect-[4/3]">
+          <div className="group relative aspect-[4/3] w-full overflow-hidden rounded-[1.35rem] border border-cyan-300/15 bg-black shadow-[0_30px_100px_rgba(0,0,0,0.55)] ring-1 ring-cyan-300/10 cf-pulse md:aspect-[4/3]">
+            <div className="pointer-events-none absolute inset-0 z-[5] bg-[linear-gradient(rgba(0,255,204,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,204,0.03)_1px,transparent_1px)] bg-[size:26px_26px] opacity-40" />
+            <div className="pointer-events-none absolute left-0 right-0 top-0 z-[6] h-24 bg-gradient-to-b from-cyan-300/10 to-transparent cf-scan" />
+            <div className="pointer-events-none absolute left-1/2 top-1/2 z-[6] h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-300/10 cf-spin" />
             <video
               ref={videoRef}
               className="absolute left-0 top-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.015]"
@@ -1693,6 +1887,10 @@ function WorkoutView({
               height={480}
               className="absolute left-0 top-0 h-full w-full"
             />
+            <div className="cf-grid-overlay pointer-events-none absolute inset-0 z-[7] opacity-40" />
+            <div className="pointer-events-none absolute inset-0 z-[9] rounded-[2rem] bg-[radial-gradient(circle_at_50%_50%,transparent_42%,rgba(0,0,0,.18)_100%)]" />
+            <div className="pointer-events-none absolute left-1/2 top-1/2 z-[9] h-44 w-44 -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-300/10 cf-orbit" />
+            <div className="pointer-events-none absolute left-1/2 top-1/2 z-[9] h-32 w-32 -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-300/10 border-dashed cf-orbit-reverse" />
 
             {!cameraReady && !cameraError && (
               <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/90">
@@ -1754,7 +1952,7 @@ function WorkoutView({
                       CURRENT REPS
                     </p>
                     <p className="text-lg font-black sm:text-2xl">
-                      <span className="text-cyan-400">
+                      <span key={goodReps} className="text-cyan-400 cf-pop">
                         {goodReps}
                       </span>
                       <span className="text-sm text-slate-500"> / {targetReps}</span>
@@ -1768,7 +1966,7 @@ function WorkoutView({
                   </div>
 
                   <div
-                    className={`rounded-full border px-2.5 py-1.5 text-[8px] font-black tracking-widest sm:px-4 sm:py-2 sm:text-[10px] ${
+                    className={`rounded-full border px-2.5 py-1.5 text-[8px] font-black tracking-widest sm:px-4 sm:py-2 sm:text-[10px] cf-border-pulse ${
                       isGoodFormUI
                         ? 'border-emerald-400 bg-emerald-400/15 text-emerald-300'
                         : 'border-rose-400 bg-rose-400/15 text-rose-300'
@@ -1781,7 +1979,7 @@ function WorkoutView({
                 </div>
 
                 <div className="absolute bottom-2.5 left-2.5 right-2.5 z-20 sm:bottom-5 sm:left-5 sm:right-5">
-                  <div className="mb-1.5 rounded-xl border border-white/10 bg-black/55 px-3 py-2 shadow-[0_10px_35px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:mb-2 sm:rounded-2xl sm:px-4 sm:py-3">
+                  <div className="mb-1.5 rounded-xl border border-white/10 bg-black/55 px-3 py-2 shadow-[0_10px_35px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:mb-2 sm:rounded-2xl sm:px-4 sm:py-3 cf-reveal">
                     <p
                       className="text-[10px] font-black leading-4 text-white transition-none opacity-100 sm:text-sm sm:leading-normal"
                     >
@@ -1852,7 +2050,7 @@ function WorkoutView({
                       <button
                         aria-label={`${config.shortName} 운동 시작`}
                         onClick={startWorkout}
-                        className="mt-3 w-full rounded-2xl bg-gradient-to-r from-cyan-300 to-cyan-200 py-3 font-black text-slate-950 shadow-[0_12px_40px_rgba(103,232,249,0.25)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_16px_50px_rgba(103,232,249,0.35)] active:translate-y-0 sm:mt-5 sm:py-3.5"
+                        className="cf-shimmer mt-3 w-full rounded-2xl bg-gradient-to-r from-cyan-300 to-cyan-200 py-3 font-black text-slate-950 shadow-[0_12px_40px_rgba(103,232,249,0.25)] transition duration-300 hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-[0_16px_50px_rgba(103,232,249,0.35)] active:translate-y-0 sm:mt-5 sm:py-3.5"
                       >
                         🎬 운동 시작 →
                       </button>
@@ -1862,8 +2060,8 @@ function WorkoutView({
 
                 {isGoalReached && (
 
-                  <div className="absolute inset-0 z-40 flex items-center justify-center bg-slate-950/90 p-5 backdrop-blur-md">
-                    <div className="w-full max-w-sm rounded-3xl border border-cyan-500/30 bg-slate-900 p-6 text-center shadow-2xl">
+                  <div className="absolute inset-0 z-40 flex items-center justify-center bg-slate-950/90 p-5 backdrop-blur-md cf-reveal">
+                    <div className="w-full max-w-sm rounded-3xl border border-cyan-500/30 bg-slate-900 p-6 text-center shadow-2xl cf-float">
                       <div className="text-4xl">🎉</div>
                       <p className="mt-3 text-xs font-black tracking-widest text-cyan-400">
                         WORKOUT COMPLETE
@@ -2174,7 +2372,7 @@ function WorkoutView({
         </aside>
 
         <section className="lg:hidden">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-3.5 shadow-[0_14px_45px_rgba(0,0,0,0.20)] backdrop-blur-xl">
+          <div className="rounded-2xl border border-cyan-300/10 bg-white/[0.035] p-3.5 shadow-[0_14px_45px_rgba(0,0,0,0.20)] backdrop-blur-xl cf-reveal">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-[8px] font-black tracking-[0.18em] text-cyan-400">LIVE ANALYSIS</p>
@@ -2208,6 +2406,9 @@ function WorkoutView({
             </div>
           </div>
         </section>
+      </div>
+      <div className="pointer-events-none fixed inset-x-0 bottom-2 z-50 flex justify-center lg:hidden">
+        <div className="cf-glass rounded-full border border-cyan-300/10 px-3 py-1.5 text-[8px] font-black tracking-[0.16em] text-cyan-200/70 shadow-[0_0_30px_rgba(34,211,238,.08)]">CHOWIFIT • AI VISION ACTIVE</div>
       </div>
     </main>
   );
