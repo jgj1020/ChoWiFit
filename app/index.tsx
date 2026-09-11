@@ -29,7 +29,6 @@ interface WorkoutRecord {
   duration: number;
   date: string;
   timestamp?: number;
-  dateKey?: string;
 }
 
 interface WorkoutStats {
@@ -45,8 +44,6 @@ interface WorkoutStats {
   }>;
   dailyData: Array<{ date: string; count: number; totalReps: number; avgScore: number }>;
   weeklyData: Array<{ week: string; count: number; totalReps: number; avgScore: number }>;
-  currentStreak: number;
-  bestScore: number;
 }
 
 interface Challenge {
@@ -58,18 +55,11 @@ interface Challenge {
   icon: string;
 }
 
-
-function getLocalDateKey(date = new Date()) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function getRecordDateKey(record: WorkoutRecord) {
-  if (record.dateKey) return record.dateKey;
-  if (record.timestamp) return getLocalDateKey(new Date(record.timestamp));
-  return record.date.split(' ')[0] ?? '';
+interface ChallengeProgress {
+  challengeId: string;
+  completedDate: string;
+  completed: boolean;
+  progress: number;
 }
 
 function calculateStats(history: WorkoutRecord[]): WorkoutStats {
@@ -82,89 +72,41 @@ function calculateStats(history: WorkoutRecord[]): WorkoutStats {
       exerciseStats: {},
       dailyData: [],
       weeklyData: [],
-      currentStreak: 0,
-      bestScore: 0,
     };
   }
 
-  type ExerciseStatAccumulator = {
-    count: number;
-    totalReps: number;
-    totalScore: number;
-    totalDuration: number;
-    avgScore: number;
-  };
-  type DailyStatAccumulator = { count: number; totalReps: number; totalScore: number };
-
-  const exerciseStats: Record<string, ExerciseStatAccumulator> = {};
-  const dailyMap: Record<string, DailyStatAccumulator> = {};
+  const exerciseStats: Record<string, any> = {};
   let totalReps = 0;
   let totalScore = 0;
   let totalDuration = 0;
-  let bestScore = 0;
+  const dailyMap: Record<string, any> = {};
+  const weeklyMap: Record<string, any> = {};
 
   history.forEach((record) => {
     totalReps += record.reps;
     totalScore += record.score;
     totalDuration += record.duration;
-    bestScore = Math.max(bestScore, record.score);
 
     if (!exerciseStats[record.exercise]) {
-      exerciseStats[record.exercise] = {
-        count: 0,
-        totalReps: 0,
-        totalScore: 0,
-        totalDuration: 0,
-        avgScore: 0,
-      };
+      exerciseStats[record.exercise] = { count: 0, totalReps: 0, totalScore: 0, totalDuration: 0 };
     }
-
     exerciseStats[record.exercise].count += 1;
     exerciseStats[record.exercise].totalReps += record.reps;
     exerciseStats[record.exercise].totalScore += record.score;
     exerciseStats[record.exercise].totalDuration += record.duration;
 
-    const dateKey = getRecordDateKey(record);
-    if (!dateKey) return;
-
-    if (!dailyMap[dateKey]) {
-      dailyMap[dateKey] = { count: 0, totalReps: 0, totalScore: 0 };
+    const dateStr = record.date.split(' ')[0];
+    if (!dailyMap[dateStr]) {
+      dailyMap[dateStr] = { count: 0, totalReps: 0, totalScore: 0 };
     }
-
-    dailyMap[dateKey].count += 1;
-    dailyMap[dateKey].totalReps += record.reps;
-    dailyMap[dateKey].totalScore += record.score;
+    dailyMap[dateStr].count += 1;
+    dailyMap[dateStr].totalReps += record.reps;
+    dailyMap[dateStr].totalScore += record.score;
   });
 
   Object.keys(exerciseStats).forEach((key) => {
-    const item = exerciseStats[key];
-    item.avgScore = Math.round(item.totalScore / Math.max(1, item.count));
+    exerciseStats[key].avgScore = Math.round(exerciseStats[key].totalScore / exerciseStats[key].count);
   });
-
-  const lastSevenDays = Array.from({ length: 7 }, (_, index) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (6 - index));
-    return getLocalDateKey(d);
-  });
-
-  const weeklyData = lastSevenDays.map((date) => {
-    const item = dailyMap[date] ?? { count: 0, totalReps: 0, totalScore: 0 };
-    return {
-      week: date,
-      count: item.count,
-      totalReps: item.totalReps,
-      avgScore: item.count ? Math.round(item.totalScore / item.count) : 0,
-    };
-  });
-
-  let currentStreak = 0;
-  for (let index = 0; index < 365; index += 1) {
-    const d = new Date();
-    d.setDate(d.getDate() - index);
-    const key = getLocalDateKey(d);
-    if ((dailyMap[key]?.count ?? 0) > 0) currentStreak += 1;
-    else break;
-  }
 
   return {
     totalWorkouts: history.length,
@@ -172,17 +114,13 @@ function calculateStats(history: WorkoutRecord[]): WorkoutStats {
     averageScore: Math.round(totalScore / history.length),
     totalDuration,
     exerciseStats,
-    dailyData: Object.entries(dailyMap)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, data]) => ({
-        date,
-        count: data.count,
-        totalReps: data.totalReps,
-        avgScore: Math.round(data.totalScore / Math.max(1, data.count)),
-      })),
-    weeklyData,
-    currentStreak,
-    bestScore,
+    dailyData: Object.entries(dailyMap).map(([date, data]) => ({
+      date,
+      count: data.count,
+      totalReps: data.totalReps,
+      avgScore: Math.round(data.totalScore / data.count),
+    })),
+    weeklyData: [],
   };
 }
 
@@ -395,6 +333,8 @@ const DAILY_CHALLENGES: Challenge[] = [
   { id: 'daily-3', exercise: 'LUNGE', targetReps: 20, reward: '🏆 +50P', difficulty: 'medium', icon: '🏃' },
   { id: 'daily-4', exercise: 'SITUP', targetReps: 25, reward: '🏆 +50P', difficulty: 'medium', icon: '🔥' },
   { id: 'daily-5', exercise: 'JUMPING_JACK', targetReps: 30, reward: '🏆 +50P', difficulty: 'hard', icon: '⭐' },
+  { id: 'daily-6', exercise: 'PLANK', targetReps: 60, reward: '🏆 +75P', difficulty: 'hard', icon: '📏' },
+  { id: 'daily-7', exercise: 'BURPEE', targetReps: 15, reward: '🏆 +75P', difficulty: 'hard', icon: '💥' },
 ];
 
 const EXERCISE_SEARCH_ALIASES: Record<ExerciseType, string[]> = {
@@ -596,7 +536,7 @@ function CatalogView({
       //    한국어 별칭으로 반드시 검색되도록 가상 결과를 하나씩 추가합니다.
       //    따라서 다음 검색이 모두 같은 푸시업을 찾습니다.
       //    '푸', '쉬', '푸쉬', '팔굽혀펴'
-      const aiMatches = SUPPORTED_EXERCISES.map((item) => item.type)
+      const aiMatches = (Object.keys(EXERCISE_CONFIGS) as ExerciseType[])
         .filter((type) => {
           const aliases = EXERCISE_SEARCH_ALIASES[type].map(normalizeSearchText);
           return aliases.some(
@@ -706,7 +646,7 @@ function CatalogView({
             </div>
           </div>
 
-          <div className="mt-5 flex gap-3 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-3 md:overflow-visible md:pb-0 lg:grid-cols-5">
+          <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
             {popularExercises.map((ex) => {
               const selected = selectedExercise === ex.type && !isSearchMode;
               return (
@@ -714,7 +654,7 @@ function CatalogView({
                   key={ex.type}
                   type="button"
                   onClick={() => setSelectedExercise(ex.type)}
-                  className={`group relative min-w-[132px] shrink-0 overflow-hidden rounded-2xl border p-3 text-left transition duration-300 hover:-translate-y-1 sm:min-w-0 sm:p-4 ${
+                  className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition duration-300 hover:-translate-y-1 ${
                     selected
                       ? 'border-cyan-300/70 bg-cyan-400/10 shadow-[0_20px_50px_rgba(0,255,204,0.10)]'
                       : 'border-white/10 bg-black/20 hover:border-white/20 hover:bg-white/[0.045]'
@@ -735,7 +675,7 @@ function CatalogView({
             })}
           </div>
 
-          <div className="mt-4 flex flex-col gap-3 rounded-[1.25rem] border border-cyan-300/20 bg-gradient-to-r from-cyan-400/10 via-transparent to-transparent p-4 sm:mt-5 sm:flex-row sm:items-center sm:justify-between sm:rounded-[1.5rem] sm:p-6">
+          <div className="mt-5 flex flex-col gap-4 rounded-[1.5rem] border border-cyan-300/20 bg-gradient-to-r from-cyan-400/10 via-transparent to-transparent p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
             <div>
               <p className="text-[10px] font-black tracking-widest text-slate-500">
                 SELECTED EXERCISE
@@ -747,7 +687,7 @@ function CatalogView({
             <button
               type="button"
               onClick={() => onStart(selectedExercise)}
-              className="w-full rounded-2xl bg-white px-5 py-3.5 text-center font-black text-slate-950 sm:w-auto sm:px-6 shadow-[0_10px_40px_rgba(255,255,255,0.08)] transition hover:-translate-y-0.5 hover:bg-cyan-200"
+              className="rounded-2xl bg-white px-6 py-3.5 font-black text-slate-950 shadow-[0_10px_40px_rgba(255,255,255,0.08)] transition hover:-translate-y-0.5 hover:bg-cyan-200"
             >
               자세 교정 받기 →
             </button>
@@ -978,6 +918,7 @@ function WorkoutView({
   const [isWorkoutStarted, setIsWorkoutStarted] = useState(false);
   const [showHistory, setShowHistory] = useState<'none' | 'history' | 'stats'>('none');
   const [cameraStarted, setCameraStarted] = useState(false);
+  const [challengeProgress, setChallengeProgress] = useState<Record<string, ChallengeProgress>>({});
   const [todayChallenge, setTodayChallenge] = useState<Challenge | null>(null);
   const [feedbackVisible, setFeedbackVisible] = useState(true);
   const [lastScore, setLastScore] = useState<number | null>(null);
@@ -1009,6 +950,22 @@ function WorkoutView({
   // MediaPipe는 한 번만 초기화하고, 아래 Ref로 최신 상태를 읽습니다.
   const isGoalReached = goodReps >= targetReps;
 
+  const todayChallengeGoodReps = todayChallenge
+    ? history
+        .filter((record) => {
+          if (!record.timestamp) return false;
+          const recordDate = new Date(record.timestamp);
+          const today = new Date();
+          return (
+            record.exercise === EXERCISE_CONFIGS[todayChallenge.exercise].shortName &&
+            recordDate.getFullYear() === today.getFullYear() &&
+            recordDate.getMonth() === today.getMonth() &&
+            recordDate.getDate() === today.getDate()
+          );
+        })
+        .reduce((sum, record) => sum + record.goodReps, 0)
+    : 0;
+
   const selectedExerciseRef = useRef(selectedExercise);
   const isWorkoutStartedRef = useRef(isWorkoutStarted);
   const isGoalReachedRef = useRef(isGoalReached);
@@ -1037,30 +994,8 @@ function WorkoutView({
     reps > 0
       ? Math.min(100, Math.round((goodReps / reps) * 100))
       : 0;
-  const correctionReps = Math.max(0, reps - goodReps);
-  const previousBestScore = useMemo(
-    () =>
-      history
-        .filter((record) => record.exercise === config.shortName)
-        .reduce((best, record) => Math.max(best, record.score), 0),
-    [history, config.shortName]
-  );
 
   const stats = useMemo(() => calculateStats(history), [history]);
-
-  const todayChallengeReps = useMemo(() => {
-    if (!todayChallenge) return 0;
-    const todayKey = getLocalDateKey();
-    const exerciseName = EXERCISE_CONFIGS[todayChallenge.exercise].shortName;
-
-    return history
-      .filter((record) => getRecordDateKey(record) === todayKey && record.exercise === exerciseName)
-      .reduce((sum, record) => sum + record.goodReps, 0);
-  }, [history, todayChallenge]);
-
-  const todayChallengeCompleted = Boolean(
-    todayChallenge && todayChallengeReps >= todayChallenge.targetReps
-  );
 
   useEffect(() => {
     try {
@@ -1072,35 +1007,31 @@ function WorkoutView({
   }, []);
 
   useEffect(() => {
-    const today = getLocalDateKey();
+    const today = new Date().toISOString().split('T')[0];
+
     try {
-      const savedChallenge = localStorage.getItem('chowifit-challenge');
-      const parsed = savedChallenge
-        ? JSON.parse(savedChallenge) as {
-            date?: string;
-            challengeId?: string;
-            progress?: Record<string, unknown>;
-          }
-        : {};
+      const savedChallengeJson = localStorage.getItem('chowifit-challenge');
+      const parsed = savedChallengeJson ? JSON.parse(savedChallengeJson) : null;
+      const savedChallengeId = parsed?.challengeId;
+      const savedChallenge = DAILY_CHALLENGES.find((challenge) => challenge.id === savedChallengeId);
 
-      const savedChallengeItem = parsed.challengeId
-        ? DAILY_CHALLENGES.find((challenge) => challenge.id === parsed.challengeId)
-        : null;
-
-      if (parsed.date === today && savedChallengeItem) {
-        setTodayChallenge(savedChallengeItem);
+      if (parsed?.date === today && savedChallenge) {
+        setTodayChallenge(savedChallenge);
+        setChallengeProgress(parsed.progress || {});
         return;
       }
 
-      const randomChallenge = DAILY_CHALLENGES[Math.floor(Math.random() * DAILY_CHALLENGES.length)];
-      setTodayChallenge(randomChallenge);
+      const nextChallenge = DAILY_CHALLENGES[Math.floor(Math.random() * DAILY_CHALLENGES.length)];
       localStorage.setItem(
         'chowifit-challenge',
-        JSON.stringify({ date: today, challengeId: randomChallenge.id, progress: {} })
+        JSON.stringify({ date: today, challengeId: nextChallenge.id, progress: {} })
       );
+      setTodayChallenge(nextChallenge);
+      setChallengeProgress({});
     } catch {
-      const randomChallenge = DAILY_CHALLENGES[Math.floor(Math.random() * DAILY_CHALLENGES.length)];
-      setTodayChallenge(randomChallenge);
+      const nextChallenge = DAILY_CHALLENGES[Math.floor(Math.random() * DAILY_CHALLENGES.length)];
+      setTodayChallenge(nextChallenge);
+      setChallengeProgress({});
     }
   }, []);
 
@@ -1134,7 +1065,6 @@ function WorkoutView({
         minute: '2-digit',
       }),
       timestamp: Date.now(),
-      dateKey: getLocalDateKey(),
     };
 
     setHistory((prev) => {
@@ -1246,7 +1176,7 @@ function WorkoutView({
   };
 
   useEffect(() => {
-    if (!isScriptLoaded || !cameraStarted) return;
+    if (!isScriptLoaded) return;
 
     let animationFrameId: number | null = null;
     let poseInstance: any = null;
@@ -1406,13 +1336,9 @@ function WorkoutView({
                 if (isDownRef.current && !isGoodForm) wasFormGoodDuringDownRef.current = false;
 
                 if (upCondition && isDownRef.current && now - downTimestampRef.current > 200) {
-                  const completedWithGoodForm = wasFormGoodDuringDownRef.current;
                   setReps((prev) => prev + 1);
-                  if (completedWithGoodForm) {
-                    setGoodReps((prev) => prev + 1);
-                  }
+                  setGoodReps((prev) => prev + 1);
                   isDownRef.current = false;
-                  wasFormGoodDuringDownRef.current = true;
                 }
               }
 
@@ -1585,7 +1511,7 @@ function WorkoutView({
         videoRef.current.srcObject = null;
       }
     };
-  }, [isScriptLoaded, cameraStarted]);
+  }, [isScriptLoaded]);
 
   return (
     <main className="min-h-screen bg-[#07090d] text-white font-sans selection:bg-cyan-400/30">
@@ -1595,70 +1521,70 @@ function WorkoutView({
         onLoad={() => setIsScriptLoaded(true)}
       />
 
-      <header className="mx-auto flex max-w-7xl items-start justify-between gap-3 px-3 py-4 sm:items-center sm:px-8 sm:py-5">
+      <header className="mx-auto flex max-w-7xl items-center justify-between px-3 py-3.5 sm:px-8 sm:py-5">
         <div>
           <button
             onClick={onBack}
-            className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[10px] font-black tracking-wide text-slate-400 transition hover:border-cyan-400/30 hover:text-cyan-300"
+            className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[9px] font-black tracking-wide text-slate-400 transition hover:border-cyan-400/30 hover:text-cyan-300 sm:mb-3 sm:px-3 sm:py-1.5 sm:text-[10px]"
           >
             ← 운동 목록으로
           </button>
           <h1 className="text-xl font-black tracking-tight text-white sm:text-2xl">
             ChoWiFit
-            <span className="ml-2 rounded-full bg-cyan-400/10 px-2.5 py-1 text-[9px] font-black text-cyan-300">LIVE AI</span>
+            <span className="ml-1.5 rounded-full bg-cyan-400/10 px-2 py-0.5 text-[8px] font-black text-cyan-300 sm:ml-2 sm:px-2.5 sm:py-1 sm:text-[9px]">LIVE AI</span>
           </h1>
-          <p className="mt-1 max-w-[220px] text-[11px] leading-4 text-slate-400 sm:max-w-none sm:text-xs">
+          <p className="mt-0.5 text-[9px] text-slate-400 sm:mt-1 sm:text-xs">
             AI가 운동 자세를 실시간으로 분석해드립니다.
           </p>
         </div>
 
         <button
           onClick={() => setShowHistory(showHistory === 'none' ? 'stats' : 'none')}
-          className="shrink-0 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-[11px] font-bold text-slate-200 sm:rounded-2xl sm:px-4 sm:py-2.5 sm:text-xs transition hover:border-cyan-400/30 hover:text-cyan-300"
+          className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-[10px] font-bold text-slate-200 transition hover:border-cyan-400/30 hover:text-cyan-300 sm:rounded-2xl sm:px-4 sm:py-2.5 sm:text-xs"
         >
           📊 통계
         </button>
       </header>
 
-      <div className="mx-auto grid max-w-7xl gap-4 px-3 pb-8 sm:gap-5 sm:px-8 sm:pb-10 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="mx-auto grid max-w-7xl gap-3 px-3 pb-6 sm:gap-5 sm:px-8 sm:pb-10 lg:grid-cols-[minmax(0,1fr)_320px]">
         {todayChallenge && (
-          <div className="col-span-full rounded-[1.25rem] border border-cyan-400/30 bg-gradient-to-r from-cyan-400/10 via-cyan-400/5 to-transparent p-3.5 shadow-[0_20px_60px_rgba(0,255,204,0.10)] backdrop-blur-xl sm:rounded-[1.5rem] sm:p-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-cyan-400/20 text-3xl sm:h-14 sm:w-14 sm:text-4xl">{todayChallenge.icon}</div>
+          <div className="col-span-full rounded-2xl border border-cyan-400/30 bg-gradient-to-r from-cyan-400/10 via-cyan-400/5 to-transparent p-3 shadow-[0_16px_45px_rgba(0,255,204,0.10)] backdrop-blur-xl sm:rounded-[1.5rem] sm:p-5 sm:shadow-[0_20px_60px_rgba(0,255,204,0.15)]">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2.5 sm:gap-4">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-400/20 text-2xl sm:h-14 sm:w-14 sm:rounded-2xl sm:text-4xl">{todayChallenge.icon}</div>
                 <div>
-                  <p className="text-xs font-black tracking-widest text-cyan-300">🔥 오늘의 챌린지</p>
-                  <h3 className="mt-1 text-lg font-black">
+                  <p className="text-[9px] font-black tracking-widest text-cyan-300 sm:text-xs">🔥 오늘의 챌린지</p>
+                  <h3 className="mt-0.5 text-sm font-black sm:mt-1 sm:text-lg">
                     {EXERCISE_CONFIGS[todayChallenge.exercise].shortName} <span className="text-cyan-300">{todayChallenge.targetReps}회</span>
                   </h3>
-                  <p className="mt-1 text-xs text-slate-400">
+                  <p className="mt-0.5 text-[9px] text-slate-400 sm:mt-1 sm:text-xs">
                     미션을 완료하면 {todayChallenge.reward}
                   </p>
                 </div>
               </div>
-              <div className="flex w-full flex-col items-start gap-2 sm:w-auto sm:items-end">
-                <div className="w-full sm:w-40">
+              <div className="flex shrink-0 flex-col items-end gap-1.5 sm:gap-2">
+                <div className="w-[104px] sm:w-40">
                   <div className="flex justify-between mb-1">
-                    <span className="text-xs font-bold text-slate-300">진행도</span>
-                    <span className="text-xs font-black text-cyan-300">
-                      {Math.min(todayChallengeReps, todayChallenge.targetReps)} / {todayChallenge.targetReps}
+                    <span className="text-[9px] font-bold text-slate-300 sm:text-xs">진행도</span>
+                    <span className="text-[9px] font-black text-cyan-300 sm:text-xs">
+                      {todayChallengeGoodReps} / {todayChallenge.targetReps}
                     </span>
                   </div>
-                  <div className="h-2 w-full rounded-full sm:w-40 bg-slate-900/50 overflow-hidden border border-cyan-400/20">
+                  <div className="h-1.5 w-[104px] rounded-full sm:h-2 sm:w-40 bg-slate-900/50 overflow-hidden border border-cyan-400/20">
                     <div 
                       className="h-full bg-gradient-to-r from-cyan-400 to-cyan-300 transition-all duration-300"
                       style={{
-                        width: `${Math.min(100, (todayChallengeReps / todayChallenge.targetReps) * 100)}%`
+                        width: `${Math.min(100, (todayChallengeGoodReps / todayChallenge.targetReps) * 100)}%`
                       }}
                     />
                   </div>
                 </div>
-                {todayChallengeCompleted ? (
+                {todayChallengeGoodReps >= todayChallenge.targetReps ? (
                   <div className="rounded-full bg-emerald-400/20 border border-emerald-400/40 px-3 py-1 text-xs font-black text-emerald-300">✅ 완료!</div>
                 ) : (
                   <button 
                     onClick={() => handleExerciseChange(todayChallenge.exercise)}
-                    className="rounded-full bg-cyan-400 px-4 py-1.5 text-xs font-black text-slate-950 hover:bg-cyan-300 transition"
+                    className="rounded-full bg-cyan-400 px-3 py-1.5 text-[9px] font-black text-slate-950 transition hover:bg-cyan-300 sm:px-4 sm:text-xs"
                   >
                     도전하기
                   </button>
@@ -1668,32 +1594,26 @@ function WorkoutView({
           </div>
         )}
         <section>
-          <div className="mb-4 overflow-hidden rounded-[1.25rem] border border-white/10 bg-white/[0.035] sm:rounded-[1.5rem] shadow-[0_20px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl">
-            <div className="flex items-center justify-between border-b border-white/5 px-4 py-3 sm:px-5">
+          <div className="mb-3 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] shadow-[0_20px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+            <div className="flex items-center justify-between border-b border-white/5 px-3 py-2.5 sm:px-5 sm:py-3">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-300/10 text-2xl">{config.icon}</div>
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-300/10 text-xl sm:h-10 sm:w-10 sm:text-2xl">{config.icon}</div>
                 <div>
-                  <p className="text-[9px] font-black tracking-[0.18em] text-cyan-300">WORKOUT SESSION</p>
-                  <h2 className="mt-0.5 text-base font-black sm:text-lg">{config.shortName}</h2>
+                  <p className="text-[8px] font-black tracking-[0.18em] text-cyan-300 sm:text-[9px]">WORKOUT SESSION</p>
+                  <h2 className="mt-0.5 text-sm font-black sm:text-lg">{config.shortName}</h2>
                 </div>
               </div>
-              <div className="rounded-full border border-emerald-400/20 bg-emerald-400/5 px-2.5 py-1 text-[9px] font-black text-emerald-300">AI COACH</div>
+              <div className="rounded-full border border-emerald-400/20 bg-emerald-400/5 px-2 py-1 text-[8px] font-black text-emerald-300 sm:px-2.5 sm:text-[9px]">AI COACH</div>
             </div>
-            <div className="p-3.5 sm:p-5">
-            <div className="mb-3 flex items-center justify-between md:hidden">
-              <div>
-                <p className="text-[10px] font-black tracking-widest text-slate-500">EXERCISE</p>
-                <p className="mt-1 text-sm font-black text-white">운동 변경</p>
-              </div>
-              <span className="text-[10px] font-bold text-slate-500">좌우로 넘겨보세요</span>
-            </div>
-            <div className="mb-3 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] md:grid md:grid-cols-3 md:overflow-visible md:pb-0 lg:grid-cols-5 [&::-webkit-scrollbar]:hidden">
-              {SUPPORTED_EXERCISES.map(({ type }) => (
+            <div className="p-3 sm:p-5">
+            <div className="mb-4 hidden grid-cols-3 gap-3 md:grid lg:grid-cols-5">
+              {(Object.keys(EXERCISE_CONFIGS) as ExerciseType[]).map(
+                (type) => (
                   <button
                     key={type}
                     onClick={() => handleExerciseChange(type)}
                     disabled={isWorkoutStarted}
-                    className={`group relative min-w-[132px] shrink-0 overflow-hidden rounded-2xl border p-3 text-left transition duration-300 hover:-translate-y-1 sm:min-w-0 sm:p-4 ${
+                    className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition duration-300 hover:-translate-y-1 ${
                       selectedExercise === type
                         ? 'border-cyan-300/70 bg-cyan-400/10 shadow-[0_20px_50px_rgba(0,255,204,0.10)]'
                         : 'border-white/10 bg-black/20 hover:border-white/20 hover:bg-white/[0.045]'
@@ -1713,9 +1633,9 @@ function WorkoutView({
               )}
             </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-xs font-bold text-slate-400">
+                <p className="text-[10px] font-bold text-slate-400 sm:text-xs">
                   목표 횟수
                 </p>
                 <div className="mt-1 flex items-center gap-2">
@@ -1726,11 +1646,11 @@ function WorkoutView({
                       setTargetReps((prev) => Math.max(1, prev - 1));
                     }}
                     disabled={isWorkoutStarted}
-                    className={`h-9 w-9 rounded-xl bg-slate-800 text-lg font-black text-cyan-400 hover:bg-slate-700 ${isWorkoutStarted ? 'cursor-not-allowed opacity-50' : ''}`}
+                    className={`h-8 w-8 rounded-lg bg-slate-800 text-base font-black text-cyan-400 hover:bg-slate-700 sm:h-9 sm:w-9 sm:rounded-xl sm:text-lg ${isWorkoutStarted ? 'cursor-not-allowed opacity-50' : ''}`}
                   >
                     -
                   </button>
-                  <span className="w-12 text-center text-xl font-black">
+                  <span className="w-10 text-center text-lg font-black sm:w-12 sm:text-xl">
                     {targetReps}
                   </span>
                   <button
@@ -1740,18 +1660,18 @@ function WorkoutView({
                       setTargetReps((prev) => prev + 1);
                     }}
                     disabled={isWorkoutStarted}
-                    className={`h-9 w-9 rounded-xl bg-slate-800 text-lg font-black text-cyan-400 hover:bg-slate-700 ${isWorkoutStarted ? 'cursor-not-allowed opacity-50' : ''}`}
+                    className={`h-8 w-8 rounded-lg bg-slate-800 text-base font-black text-cyan-400 hover:bg-slate-700 sm:h-9 sm:w-9 sm:rounded-xl sm:text-lg ${isWorkoutStarted ? 'cursor-not-allowed opacity-50' : ''}`}
                   >
                     +
                   </button>
                 </div>
               </div>
 
-              <div className="w-full rounded-xl bg-slate-950 px-3.5 py-2.5 sm:w-auto sm:max-w-[28rem] sm:px-4 sm:py-3">
-                <p className="text-[10px] font-bold tracking-widest text-slate-500">
+              <div className="rounded-xl bg-slate-950 px-3 py-2.5 sm:px-4 sm:py-3">
+                <p className="text-[9px] font-bold tracking-widest text-slate-500 sm:text-[10px]">
                   TODAY GUIDE
                 </p>
-                <p className="mt-1 text-xs text-slate-300">
+                <p className="mt-0.5 text-[10px] text-slate-300 sm:mt-1 sm:text-xs">
                   {config.guideText}
                 </p>
               </div>
@@ -1759,7 +1679,7 @@ function WorkoutView({
             </div>
           </div>
 
-          <div className="group relative order-first aspect-[4/3] w-full overflow-hidden rounded-[1.25rem] border border-white/10 bg-black shadow-[0_20px_65px_rgba(0,0,0,0.5)] ring-1 ring-cyan-300/5 sm:rounded-[2rem] sm:shadow-[0_30px_100px_rgba(0,0,0,0.55)] md:aspect-[4/3]">
+          <div className="group relative aspect-[4/3] w-full overflow-hidden rounded-[1.35rem] border border-white/10 bg-black shadow-[0_30px_100px_rgba(0,0,0,0.55)] ring-1 ring-cyan-300/5 md:aspect-[4/3]">
             <video
               ref={videoRef}
               className="absolute left-0 top-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.015]"
@@ -1824,22 +1744,22 @@ function WorkoutView({
                   <div className="absolute right-4 top-1/2 h-16 w-px -translate-y-1/2 bg-cyan-300/30" />
                 </div>
 
-                <div className="absolute left-3 top-3 z-20 rounded-full border border-white/10 bg-black/45 px-3 py-1.5 text-[9px] font-black tracking-[0.18em] text-white/75 backdrop-blur-xl sm:left-5 sm:top-5">
+                <div className="absolute left-2.5 top-2.5 z-20 rounded-full border border-white/10 bg-black/45 px-2 py-1 text-[8px] font-black tracking-[0.15em] text-white/80 backdrop-blur-xl sm:left-5 sm:top-5 sm:px-3 sm:py-1.5 sm:text-[9px] sm:tracking-[0.18em]">
                   {config.shortName.toUpperCase()} · LIVE
                 </div>
 
-                <div className="absolute left-3 right-3 top-12 z-20 flex items-start justify-between gap-2 sm:left-5 sm:right-5 sm:top-16">
-                  <div className="rounded-2xl border border-white/10 bg-black/50 px-3 py-2 shadow-[0_8px_30px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:px-5 sm:py-3">
-                    <p className="text-[9px] font-black tracking-widest text-cyan-400">
+                <div className="absolute left-2.5 right-2.5 top-11 z-20 flex items-start justify-between gap-2 sm:left-5 sm:right-5 sm:top-16">
+                  <div className="rounded-xl border border-white/10 bg-black/50 px-2.5 py-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:rounded-2xl sm:px-5 sm:py-3">
+                    <p className="text-[7px] font-black tracking-widest text-cyan-400 sm:text-[9px]">
                       CURRENT REPS
                     </p>
-                    <p className="text-xl font-black sm:text-2xl">
+                    <p className="text-lg font-black sm:text-2xl">
                       <span className="text-cyan-400">
                         {goodReps}
                       </span>
                       <span className="text-sm text-slate-500"> / {targetReps}</span>
                     </p>
-                    <div className="mt-2 h-1.5 w-24 overflow-hidden rounded-full bg-white/10 sm:w-32">
+                    <div className="mt-1.5 h-1 w-20 overflow-hidden sm:mt-2 sm:h-1.5 sm:w-24 rounded-full bg-white/10 sm:w-32">
                       <div
                         className="h-full rounded-full bg-cyan-300 shadow-[0_0_14px_rgba(103,232,249,0.55)] transition-all duration-500"
                         style={{ width: `${Math.min(100, (goodReps / Math.max(1, targetReps)) * 100)}%` }}
@@ -1848,52 +1768,43 @@ function WorkoutView({
                   </div>
 
                   <div
-                    className={`rounded-full border px-4 py-2 text-[10px] font-black tracking-widest ${
+                    className={`rounded-full border px-2.5 py-1.5 text-[8px] font-black tracking-widest sm:px-4 sm:py-2 sm:text-[10px] ${
                       isGoodFormUI
                         ? 'border-emerald-400 bg-emerald-400/15 text-emerald-300'
                         : 'border-rose-400 bg-rose-400/15 text-rose-300'
                     }`}
                   >
-                    {!isLoaded
-                      ? '● AI 준비 중'
-                      : isGoodFormUI
-                        ? '● GOOD FORM'
-                        : '● CHECK POSTURE'}
+                    {isGoodFormUI
+                      ? '● GOOD FORM'
+                      : '● CHECK POSTURE'}
                   </div>
                 </div>
 
-                <div className="absolute bottom-3 left-3 right-3 z-20 sm:bottom-5 sm:left-5 sm:right-5">
-                  <div className="mb-2 rounded-2xl border border-white/10 bg-black/55 px-4 py-3 shadow-[0_10px_35px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+                <div className="absolute bottom-2.5 left-2.5 right-2.5 z-20 sm:bottom-5 sm:left-5 sm:right-5">
+                  <div className="mb-1.5 rounded-xl border border-white/10 bg-black/55 px-3 py-2 shadow-[0_10px_35px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:mb-2 sm:rounded-2xl sm:px-4 sm:py-3">
                     <p
-                      className="text-xs font-black text-white transition-none opacity-100 sm:text-sm"
+                      className="text-[10px] font-black leading-4 text-white transition-none opacity-100 sm:text-sm sm:leading-normal"
                     >
                       {feedback}
                     </p>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="rounded-2xl border border-white/10 bg-black/60 px-3 py-2.5 backdrop-blur-xl">
-                      <p className="text-[9px] font-bold text-slate-500">TIME</p>
-                      <p className="text-sm font-black">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <div className="rounded-xl border border-white/10 bg-black/60 px-2.5 py-2 backdrop-blur-xl sm:rounded-2xl sm:px-3 sm:py-2.5">
+                      <p className="text-[7px] font-bold text-slate-500 sm:text-[9px]">TIME</p>
+                      <p className="text-xs font-black sm:text-sm">
                         {formatTime(elapsedSeconds)}
                       </p>
                     </div>
 
-                    <div className="rounded-2xl border border-white/10 bg-black/60 px-3 py-2.5 backdrop-blur-xl">
-                      <p className="text-[9px] font-bold text-cyan-400">POSTURE</p>
+                    <div className="rounded-xl border border-white/10 bg-black/60 px-2.5 py-2 backdrop-blur-xl sm:rounded-2xl sm:px-3 sm:py-2.5">
+                      <p className="text-[7px] font-bold text-cyan-400 sm:text-[9px]">ANGLE</p>
                       <p className="text-sm font-black text-cyan-400">
-                        {isGoodFormUI ? '좋아요' : '교정 필요'}
-                      </p>
-                    </div>
-
-                    <div className="hidden rounded-2xl border border-white/10 bg-black/60 px-3 py-2.5 backdrop-blur-xl sm:block">
-                      <p className="text-[9px] font-bold text-slate-500">ANGLE</p>
-                      <p className="text-sm font-black text-white">
                         {currentAngle !== null ? `${currentAngle}°` : '--'}
                       </p>
                     </div>
 
-                    <div className="ml-auto hidden rounded-2xl border border-white/10 bg-black/55 px-3 py-2.5 text-right backdrop-blur-xl transition-all duration-300 hover:border-cyan-400/50 hover:bg-black/40 lg:block">
+                    <div className="ml-auto hidden rounded-2xl border border-white/10 bg-black/55 px-3 py-2.5 text-right backdrop-blur-xl transition-all duration-300 hover:border-cyan-400/50 hover:bg-black/40 sm:block">
                       <p className="text-[9px] font-bold text-cyan-400/70">💡 TIP</p>
                       <p className="hidden max-w-[150px] truncate text-[10px] text-slate-200 sm:block">
                         {config.guideText}
@@ -1903,9 +1814,9 @@ function WorkoutView({
                 </div>
 
                 {!isWorkoutStarted && !isGoalReached && (
-                  <div className="absolute inset-0 z-30 flex items-center justify-center bg-[#05070a]/70 p-5 backdrop-blur-md">
-                    <div className="w-full max-w-md rounded-[1.5rem] border border-white/10 bg-[#090d13]/95 p-4 text-center shadow-[0_30px_100px_rgba(0,0,0,0.65)] sm:rounded-[2rem] sm:p-8">
-                      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-400/10 text-3xl sm:h-16 sm:w-16 sm:text-4xl">
+                  <div className="absolute inset-0 z-30 flex items-center justify-center bg-[#05070a]/72 p-3 backdrop-blur-md sm:p-5">
+                    <div className="w-full max-w-md rounded-[1.5rem] border border-white/10 bg-[#090d13]/95 p-4 text-center shadow-[0_24px_70px_rgba(0,0,0,0.60)] sm:rounded-[2rem] sm:p-8">
+                      <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-400/10 text-3xl sm:h-16 sm:w-16 sm:text-4xl">
                         {config.icon}
                       </div>
 
@@ -1917,25 +1828,16 @@ function WorkoutView({
                         {config.shortName}
                       </h2>
 
-                      <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-5">
-                        <div className="rounded-2xl border border-white/5 bg-black/25 p-3">
-                          <p className="text-[9px] font-black tracking-widest text-slate-500">TODAY'S TARGET</p>
-                          <p className="mt-1 text-2xl font-black text-white sm:text-3xl">
-                            {targetReps}
-                            <span className="ml-1 text-xs text-slate-500 sm:text-sm">회</span>
-                          </p>
-                        </div>
-                        <div className="rounded-2xl border border-white/5 bg-black/25 p-3">
-                          <p className="text-[9px] font-black tracking-widest text-slate-500">BEST SCORE</p>
-                          <p className="mt-1 text-2xl font-black text-cyan-300 sm:text-3xl">
-                            {previousBestScore || '--'}
-                            {previousBestScore > 0 && <span className="ml-1 text-xs text-slate-500">점</span>}
-                          </p>
-                        </div>
+                      <div className="mt-2.5 rounded-2xl border border-white/5 bg-black/25 p-2.5 sm:mt-5 sm:p-4">
+                        <p className="text-[10px] font-black tracking-widest text-slate-500">TODAY'S TARGET</p>
+                        <p className="mt-1 text-xl font-black text-white sm:text-3xl">
+                          {targetReps}
+                          <span className="ml-1 text-xs text-slate-500 sm:text-sm">회</span>
+                        </p>
                       </div>
 
-                      <div className="mt-2 hidden flex-col items-start gap-3 rounded-2xl border border-slate-800 bg-slate-950 p-4 text-left sm:mt-4 sm:flex">
-                        <span className="text-xl">📷</span>
+                      <div className="mt-2 flex items-start gap-2 rounded-2xl border border-slate-800 bg-slate-950 p-3 text-left sm:mt-4 sm:flex sm:gap-3 sm:p-4">
+                        <span className="text-lg sm:text-xl">📷</span>
                         <div>
                           <p className="text-xs font-black text-white">
                             카메라를 사용합니다
@@ -1948,6 +1850,7 @@ function WorkoutView({
                       </div>
 
                       <button
+                        aria-label={`${config.shortName} 운동 시작`}
                         onClick={startWorkout}
                         className="mt-3 w-full rounded-2xl bg-gradient-to-r from-cyan-300 to-cyan-200 py-3 font-black text-slate-950 shadow-[0_12px_40px_rgba(103,232,249,0.25)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_16px_50px_rgba(103,232,249,0.35)] active:translate-y-0 sm:mt-5 sm:py-3.5"
                       >
@@ -1969,38 +1872,31 @@ function WorkoutView({
                         운동 완료!
                       </h2>
 
-                      <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      <div className="mt-6 grid grid-cols-3 gap-2">
                         <div className="rounded-2xl bg-slate-950 p-3">
-                          <p className="text-[10px] text-slate-500">총 반복</p>
-                          <p className="mt-1 text-xl font-black">{reps}</p>
-                        </div>
-                        <div className="rounded-2xl bg-slate-950 p-3">
-                          <p className="text-[10px] text-slate-500">정확한 자세</p>
-                          <p className="mt-1 text-xl font-black text-cyan-400">{goodReps}</p>
-                        </div>
-                        <div className="rounded-2xl bg-slate-950 p-3">
-                          <p className="text-[10px] text-slate-500">교정 필요</p>
-                          <p className="mt-1 text-xl font-black text-rose-300">{correctionReps}</p>
+                          <p className="text-[10px] text-slate-500">
+                            횟수
+                          </p>
+                          <p className="mt-1 text-xl font-black">
+                            {goodReps}
+                          </p>
                         </div>
                         <div className="rounded-2xl bg-slate-950 p-3">
-                          <p className="text-[10px] text-slate-500">운동 시간</p>
-                          <p className="mt-1 text-xl font-black">{formatTime(elapsedSeconds)}</p>
+                          <p className="text-[10px] text-slate-500">
+                            자세 점수
+                          </p>
+                          <p className="mt-1 text-xl font-black text-cyan-400">
+                            {score}
+                          </p>
                         </div>
-                      </div>
-
-                      <div className="mt-3 rounded-2xl border border-cyan-400/10 bg-cyan-400/5 p-4 text-left">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-black text-slate-300">자세 분석 결과</span>
-                          <span className="text-sm font-black text-cyan-300">{score} / 100</span>
+                        <div className="rounded-2xl bg-slate-950 p-3">
+                          <p className="text-[10px] text-slate-500">
+                            운동 시간
+                          </p>
+                          <p className="mt-1 text-xl font-black">
+                            {formatTime(elapsedSeconds)}
+                          </p>
                         </div>
-                        <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-950">
-                          <div className="h-full rounded-full bg-cyan-300 transition-all duration-700" style={{ width: `${score}%` }} />
-                        </div>
-                        <p className="mt-2 text-[11px] leading-5 text-slate-400">
-                          {reps - goodReps > 0
-                            ? `전체 ${reps}회 중 ${reps - goodReps}회는 자세 교정이 필요했어요.`
-                            : '모든 반복에서 안정적인 자세를 유지했어요.'}
-                        </p>
                       </div>
 
                       <p className="mt-5 text-sm text-slate-300">
@@ -2013,10 +1909,10 @@ function WorkoutView({
 
                       {history.length > 0 && history[0].exercise === config.shortName && (
                         <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950 p-3">
-                          <p className="text-[10px] font-bold tracking-widest text-slate-500">
+                          <p className="text-[9px] font-bold tracking-widest text-slate-500 sm:text-[10px]">
                             GROWTH
                           </p>
-                          <p className="mt-1 text-xs text-slate-300">
+                          <p className="mt-0.5 text-[10px] text-slate-300 sm:mt-1 sm:text-xs">
                             이전 기록과 비교하면서 꾸준히 성장해보세요 💪
                           </p>
                         </div>
@@ -2047,60 +1943,56 @@ function WorkoutView({
           </div>
         </section>
 
-        <aside className="order-last space-y-4">
-          <div className="rounded-[1.15rem] border border-white/10 bg-white/[0.035] p-3.5 shadow-[0_18px_55px_rgba(0,0,0,0.18)] backdrop-blur-xl sm:rounded-[1.5rem] sm:p-5">
-            <p className="text-[10px] font-black tracking-widest text-cyan-400 sm:text-xs">
+        <aside className="hidden space-y-4 lg:block">
+          <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.035] p-5 shadow-[0_18px_55px_rgba(0,0,0,0.20)] backdrop-blur-xl">
+            <p className="text-xs font-black tracking-widest text-cyan-400">
               LIVE ANALYSIS
             </p>
-            <h2 className="mt-1.5 text-base font-black sm:mt-2 sm:text-lg">
+            <h2 className="mt-2 text-lg font-black">
               실시간 자세 상태
             </h2>
 
             <div className="mt-4 space-y-3">
               <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-3">
                   <span className="text-[10px] font-black tracking-widest text-slate-500">AI ANALYSIS</span>
                   <span className={`rounded-full px-2 py-1 text-[9px] font-black ${isLoaded ? 'bg-emerald-400/10 text-emerald-300' : 'bg-amber-400/10 text-amber-300'}`}>
-                    {!cameraStarted ? '● 시작 대기' : isLoaded ? '● LIVE' : '● 연결 중'}
+                    {isLoaded ? '● LIVE' : '● 준비 중'}
                   </span>
                 </div>
                 <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/5">
-                  <div className={`h-full rounded-full transition-all duration-500 ${!cameraStarted ? 'w-0' : isLoaded ? 'w-full bg-cyan-300 shadow-[0_0_18px_rgba(103,232,249,0.55)]' : 'w-1/3 bg-amber-300'}`} />
+                  <div className={`h-full rounded-full transition-all duration-500 ${isLoaded ? 'w-full bg-cyan-300 shadow-[0_0_18px_rgba(103,232,249,0.55)]' : 'w-1/3 bg-amber-300'}`} />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-xl bg-slate-950 p-3">
-                  <p className="text-[10px] text-slate-500">현재 자세</p>
-                  <p className={`mt-1 text-sm font-black ${isGoodFormUI ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {isGoodFormUI ? '좋음' : '교정 필요'}
-                  </p>
-                </div>
-                <div className="rounded-xl bg-slate-950 p-3">
-                  <p className="text-[10px] text-slate-500">자세 점수</p>
-                  <p className="mt-1 text-sm font-black text-cyan-300">
-                    {reps > 0 ? `${score}점` : '--'}
-                  </p>
-                </div>
-                <div className="rounded-xl bg-slate-950 p-3">
-                  <p className="text-[10px] text-slate-500">관절 각도</p>
-                  <p className="mt-1 text-sm font-black text-slate-200">
-                    {currentAngle !== null ? `${currentAngle}°` : '--'}
-                  </p>
-                </div>
-                <div className="rounded-xl bg-slate-950 p-3">
-                  <p className="text-[10px] text-slate-500">정확한 반복</p>
-                  <p className="mt-1 text-sm font-black text-cyan-300">
-                    {goodReps} / {reps}
-                  </p>
-                </div>
+              <div className="flex items-center justify-between rounded-xl bg-slate-950 p-3">
+                <span className="text-xs text-slate-400">
+                  현재 자세
+                </span>
+                <span
+                  className={`text-xs font-bold ${
+                    isGoodFormUI
+                      ? 'text-emerald-400'
+                      : 'text-rose-400'
+                  }`}
+                >
+                  {isGoodFormUI ? '좋음' : '교정 필요'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between rounded-xl bg-slate-950 p-3">
+                <span className="text-xs text-slate-400">
+                  관절 각도
+                </span>
+                <span className="text-xs font-bold text-slate-200">
+                  {isGoodFormUI ? '안정적이에요' : '조금 수정해보세요'}
+                </span>
               </div>
 
               <div className="rounded-2xl border border-white/5 bg-black/20 p-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-[10px] font-bold text-slate-500">COACHING TIP</p>
-                  <span className="text-[9px] font-bold text-cyan-400">LIVE</span>
-                </div>
+                <p className="text-[10px] font-bold text-slate-500">
+                  COACHING TIP
+                </p>
                 <p className="mt-1 text-xs leading-5 text-slate-300">
                   {feedback}
                 </p>
@@ -2109,7 +2001,7 @@ function WorkoutView({
           </div>
 
           {showHistory === 'none' ? (
-            <div className="hidden rounded-[1.5rem] border border-white/10 bg-white/[0.035] p-5 lg:block shadow-[0_18px_55px_rgba(0,0,0,0.20)] backdrop-blur-xl">
+            <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.035] p-5 shadow-[0_18px_55px_rgba(0,0,0,0.20)] backdrop-blur-xl">
               <p className="text-xs font-black tracking-widest text-cyan-400">
                 HOW IT WORKS
               </p>
@@ -2150,7 +2042,7 @@ function WorkoutView({
               </div>
             </div>
           ) : (
-            <div className="rounded-[1.25rem] border border-white/10 bg-white/[0.035] p-4 shadow-[0_18px_55px_rgba(0,0,0,0.18)] backdrop-blur-xl sm:rounded-[1.5rem] sm:p-5">
+            <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.035] p-5 shadow-[0_18px_55px_rgba(0,0,0,0.20)] backdrop-blur-xl">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <p className="text-xs font-black tracking-widest text-cyan-400">
@@ -2202,54 +2094,20 @@ function WorkoutView({
                           <p className="mt-1 text-xl font-black text-cyan-300">{stats.averageScore.toFixed(1)}</p>
                         </div>
                         <div className="rounded-xl border border-white/5 bg-black/20 p-3">
-                          <p className="text-[10px] text-slate-500">총 반복 수</p>
+                          <p className="text-[10px] text-slate-500">총 횟수</p>
                           <p className="mt-1 text-xl font-black text-cyan-300">{stats.totalReps}</p>
                         </div>
                         <div className="rounded-xl border border-white/5 bg-black/20 p-3">
                           <p className="text-[10px] text-slate-500">총 시간</p>
                           <p className="mt-1 text-xl font-black text-cyan-300">{formatTime(stats.totalDuration)}</p>
                         </div>
-                        <div className="rounded-xl border border-white/5 bg-black/20 p-3">
-                          <p className="text-[10px] text-slate-500">연속 운동</p>
-                          <p className="mt-1 text-xl font-black text-cyan-300">{stats.currentStreak}일</p>
-                        </div>
-                        <div className="rounded-xl border border-white/5 bg-black/20 p-3">
-                          <p className="text-[10px] text-slate-500">최고 점수</p>
-                          <p className="mt-1 text-xl font-black text-cyan-300">{stats.bestScore}점</p>
-                        </div>
                       </div>
-
-                      {stats.dailyData.length > 0 && (
-                        <div className="rounded-xl border border-white/5 bg-black/20 p-3">
-                          <div className="flex items-end justify-between">
-                            <div>
-                              <p className="text-xs font-black text-slate-300">최근 운동량</p>
-                              <p className="mt-1 text-[10px] text-slate-500">기록된 운동을 날짜별로 확인해요</p>
-                            </div>
-                            <span className="text-[10px] font-bold text-cyan-300">최근 {Math.min(7, stats.dailyData.length)}일</span>
-                          </div>
-                          <div className="mt-4 flex h-24 items-end gap-2">
-                            {stats.dailyData.slice(-7).map((day) => {
-                              const maxReps = Math.max(...stats.dailyData.slice(-7).map((item) => item.totalReps), 1);
-                              const height = Math.max(10, Math.round((day.totalReps / maxReps) * 100));
-                              return (
-                                <div key={day.date} className="flex flex-1 flex-col items-center gap-1">
-                                  <div className="flex h-16 w-full items-end rounded-lg bg-slate-950/70 px-1">
-                                    <div className="w-full rounded-md bg-cyan-400/80 transition-all" style={{ height: `${height}%` }} title={`${day.totalReps}회`} />
-                                  </div>
-                                  <span className="text-[8px] text-slate-600">{day.date}</span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
 
                       {Object.entries(stats.exerciseStats).length > 0 && (
                         <div className="rounded-xl border border-white/5 bg-black/20 p-3">
                           <p className="text-xs font-black text-slate-300 mb-3">운동별 통계</p>
                           <div className="space-y-2">
-                            {(Object.entries(stats.exerciseStats) as [string, WorkoutStats['exerciseStats'][string]][]).map(([exercise, data]) => (
+                            {Object.entries(stats.exerciseStats).map(([exercise, data]) => (
                               <div key={exercise} className="flex items-center justify-between text-xs">
                                 <span className="text-slate-400">{exercise}</span>
                                 <div className="flex gap-3">
@@ -2275,10 +2133,8 @@ function WorkoutView({
                       <div className="flex justify-end mb-2">
                         <button
                           onClick={() => {
-                            if (window.confirm('모든 운동 기록을 삭제할까요?')) {
-                              setHistory([]);
-                              localStorage.removeItem(STORAGE_KEY);
-                            }
+                            setHistory([]);
+                            localStorage.removeItem(STORAGE_KEY);
                           }}
                           className="text-[10px] text-slate-500 hover:text-rose-400"
                         >
@@ -2290,7 +2146,7 @@ function WorkoutView({
                           key={record.id}
                           className="rounded-2xl border border-white/5 bg-black/20 p-3"
                         >
-                          <div className="flex items-center justify-between">
+                          <div className="flex items-center justify-between gap-3">
                             <span className="text-sm font-black">
                               {record.exercise}
                             </span>
@@ -2316,6 +2172,42 @@ function WorkoutView({
             </div>
           )}
         </aside>
+
+        <section className="lg:hidden">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-3.5 shadow-[0_14px_45px_rgba(0,0,0,0.20)] backdrop-blur-xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[8px] font-black tracking-[0.18em] text-cyan-400">LIVE ANALYSIS</p>
+                <h2 className="mt-1 text-sm font-black">실시간 자세 상태</h2>
+              </div>
+              <span className={`rounded-full px-2 py-1 text-[8px] font-black ${isLoaded ? 'bg-emerald-400/10 text-emerald-300' : 'bg-amber-400/10 text-amber-300'}`}>
+                {isLoaded ? '● LIVE' : '● 준비'}
+              </span>
+            </div>
+
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              <div className="rounded-xl bg-black/25 p-2.5">
+                <p className="text-[7px] font-bold tracking-widest text-slate-500">FORM</p>
+                <p className={`mt-1 text-[11px] font-black ${isGoodFormUI ? 'text-emerald-300' : 'text-rose-300'}`}>
+                  {isGoodFormUI ? '좋음' : '교정'}
+                </p>
+              </div>
+              <div className="rounded-xl bg-black/25 p-2.5">
+                <p className="text-[7px] font-bold tracking-widest text-slate-500">ANGLE</p>
+                <p className="mt-1 text-[11px] font-black text-cyan-300">{currentAngle !== null ? `${currentAngle}°` : '--'}</p>
+              </div>
+              <div className="rounded-xl bg-black/25 p-2.5">
+                <p className="text-[7px] font-bold tracking-widest text-slate-500">SCORE</p>
+                <p className="mt-1 text-[11px] font-black text-cyan-300">{score}</p>
+              </div>
+            </div>
+
+            <div className="mt-2 rounded-xl border border-cyan-400/10 bg-cyan-400/5 px-3 py-2.5">
+              <p className="text-[8px] font-bold tracking-widest text-cyan-400/70">COACHING TIP</p>
+              <p className="mt-1 text-[10px] leading-4 text-slate-300">{feedback}</p>
+            </div>
+          </div>
+        </section>
       </div>
     </main>
   );

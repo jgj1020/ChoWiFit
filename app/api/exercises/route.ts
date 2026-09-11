@@ -3,18 +3,13 @@ import { NextResponse } from 'next/server';
 const WGER_BASE = 'https://wger.de/api/v2';
 
 interface WgerApiResponse {
-  results?: unknown[];
+  results?: any[];
   next?: string | null;
-}
-
-interface WgerExerciseRecord {
-  name?: unknown;
-  [key: string]: unknown;
 }
 
 export async function GET() {
   try {
-    const exercises: WgerExerciseRecord[] = [];
+    const exercises: any[] = [];
     let nextUrl: string | null = `${WGER_BASE}/exercise/?language=2&status=2&limit=100&format=json`;
     let pageCount = 0;
 
@@ -29,17 +24,13 @@ export async function GET() {
       }
 
       const data: WgerApiResponse = await response.json();
-      const results = Array.isArray(data.results)
-        ? data.results.filter((item): item is WgerExerciseRecord => Boolean(item && typeof item === 'object'))
-        : [];
-
-      exercises.push(...results);
+      exercises.push(...(data.results ?? []));
       nextUrl = data.next ?? null;
       pageCount += 1;
     }
 
     const clean = exercises.filter(
-      (exercise) =>
+      (exercise: any) =>
         typeof exercise?.name === 'string' && exercise.name.trim().length > 0
     );
 
