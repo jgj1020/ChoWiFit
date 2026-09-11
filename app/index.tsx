@@ -706,7 +706,7 @@ function CatalogView({
             </div>
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
+          <div className="mt-5 flex gap-3 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-3 md:overflow-visible md:pb-0 lg:grid-cols-5">
             {popularExercises.map((ex) => {
               const selected = selectedExercise === ex.type && !isSearchMode;
               return (
@@ -714,7 +714,7 @@ function CatalogView({
                   key={ex.type}
                   type="button"
                   onClick={() => setSelectedExercise(ex.type)}
-                  className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition duration-300 hover:-translate-y-1 ${
+                  className={`group relative min-w-[132px] shrink-0 overflow-hidden rounded-2xl border p-3 text-left transition duration-300 hover:-translate-y-1 sm:min-w-0 sm:p-4 ${
                     selected
                       ? 'border-cyan-300/70 bg-cyan-400/10 shadow-[0_20px_50px_rgba(0,255,204,0.10)]'
                       : 'border-white/10 bg-black/20 hover:border-white/20 hover:bg-white/[0.045]'
@@ -735,7 +735,7 @@ function CatalogView({
             })}
           </div>
 
-          <div className="mt-5 flex flex-col gap-4 rounded-[1.5rem] border border-cyan-300/20 bg-gradient-to-r from-cyan-400/10 via-transparent to-transparent p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div className="mt-4 flex flex-col gap-3 rounded-[1.25rem] border border-cyan-300/20 bg-gradient-to-r from-cyan-400/10 via-transparent to-transparent p-4 sm:mt-5 sm:flex-row sm:items-center sm:justify-between sm:rounded-[1.5rem] sm:p-6">
             <div>
               <p className="text-[10px] font-black tracking-widest text-slate-500">
                 SELECTED EXERCISE
@@ -747,7 +747,7 @@ function CatalogView({
             <button
               type="button"
               onClick={() => onStart(selectedExercise)}
-              className="rounded-2xl bg-white px-6 py-3.5 font-black text-slate-950 shadow-[0_10px_40px_rgba(255,255,255,0.08)] transition hover:-translate-y-0.5 hover:bg-cyan-200"
+              className="w-full rounded-2xl bg-white px-5 py-3.5 text-center font-black text-slate-950 sm:w-auto sm:px-6 shadow-[0_10px_40px_rgba(255,255,255,0.08)] transition hover:-translate-y-0.5 hover:bg-cyan-200"
             >
               자세 교정 받기 →
             </button>
@@ -1595,7 +1595,7 @@ function WorkoutView({
         onLoad={() => setIsScriptLoaded(true)}
       />
 
-      <header className="mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-8">
+      <header className="mx-auto flex max-w-7xl items-start justify-between gap-3 px-3 py-4 sm:items-center sm:px-8 sm:py-5">
         <div>
           <button
             onClick={onBack}
@@ -1603,29 +1603,29 @@ function WorkoutView({
           >
             ← 운동 목록으로
           </button>
-          <h1 className="text-2xl font-black tracking-tight text-white">
+          <h1 className="text-xl font-black tracking-tight text-white sm:text-2xl">
             ChoWiFit
             <span className="ml-2 rounded-full bg-cyan-400/10 px-2.5 py-1 text-[9px] font-black text-cyan-300">LIVE AI</span>
           </h1>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 max-w-[220px] text-[11px] leading-4 text-slate-400 sm:max-w-none sm:text-xs">
             AI가 운동 자세를 실시간으로 분석해드립니다.
           </p>
         </div>
 
         <button
           onClick={() => setShowHistory(showHistory === 'none' ? 'stats' : 'none')}
-          className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-xs font-bold text-slate-200 transition hover:border-cyan-400/30 hover:text-cyan-300"
+          className="shrink-0 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-[11px] font-bold text-slate-200 sm:rounded-2xl sm:px-4 sm:py-2.5 sm:text-xs transition hover:border-cyan-400/30 hover:text-cyan-300"
         >
           📊 통계
         </button>
       </header>
 
-      <div className="mx-auto grid max-w-7xl gap-5 px-4 pb-10 sm:px-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="mx-auto grid max-w-7xl gap-4 px-3 pb-8 sm:gap-5 sm:px-8 sm:pb-10 lg:grid-cols-[minmax(0,1fr)_320px]">
         {todayChallenge && (
-          <div className="rounded-[1.5rem] border border-cyan-400/30 bg-gradient-to-r from-cyan-400/10 via-cyan-400/5 to-transparent p-5 shadow-[0_20px_60px_rgba(0,255,204,0.15)] backdrop-blur-xl col-span-full">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-400/20 text-4xl">{todayChallenge.icon}</div>
+          <div className="col-span-full rounded-[1.25rem] border border-cyan-400/30 bg-gradient-to-r from-cyan-400/10 via-cyan-400/5 to-transparent p-3.5 shadow-[0_20px_60px_rgba(0,255,204,0.10)] backdrop-blur-xl sm:rounded-[1.5rem] sm:p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-cyan-400/20 text-3xl sm:h-14 sm:w-14 sm:text-4xl">{todayChallenge.icon}</div>
                 <div>
                   <p className="text-xs font-black tracking-widest text-cyan-300">🔥 오늘의 챌린지</p>
                   <h3 className="mt-1 text-lg font-black">
@@ -1636,15 +1636,15 @@ function WorkoutView({
                   </p>
                 </div>
               </div>
-              <div className="flex flex-col items-end gap-2">
-                <div className="w-40">
+              <div className="flex w-full flex-col items-start gap-2 sm:w-auto sm:items-end">
+                <div className="w-full sm:w-40">
                   <div className="flex justify-between mb-1">
                     <span className="text-xs font-bold text-slate-300">진행도</span>
                     <span className="text-xs font-black text-cyan-300">
                       {Math.min(todayChallengeReps, todayChallenge.targetReps)} / {todayChallenge.targetReps}
                     </span>
                   </div>
-                  <div className="h-2 w-40 rounded-full bg-slate-900/50 overflow-hidden border border-cyan-400/20">
+                  <div className="h-2 w-full rounded-full sm:w-40 bg-slate-900/50 overflow-hidden border border-cyan-400/20">
                     <div 
                       className="h-full bg-gradient-to-r from-cyan-400 to-cyan-300 transition-all duration-300"
                       style={{
@@ -1668,7 +1668,7 @@ function WorkoutView({
           </div>
         )}
         <section>
-          <div className="mb-4 overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/[0.035] shadow-[0_20px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+          <div className="mb-4 overflow-hidden rounded-[1.25rem] border border-white/10 bg-white/[0.035] sm:rounded-[1.5rem] shadow-[0_20px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl">
             <div className="flex items-center justify-between border-b border-white/5 px-4 py-3 sm:px-5">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-300/10 text-2xl">{config.icon}</div>
@@ -1679,14 +1679,21 @@ function WorkoutView({
               </div>
               <div className="rounded-full border border-emerald-400/20 bg-emerald-400/5 px-2.5 py-1 text-[9px] font-black text-emerald-300">AI COACH</div>
             </div>
-            <div className="p-4 sm:p-5">
-            <div className="mb-4 hidden grid-cols-3 gap-3 md:grid lg:grid-cols-5">
+            <div className="p-3.5 sm:p-5">
+            <div className="mb-3 flex items-center justify-between md:hidden">
+              <div>
+                <p className="text-[10px] font-black tracking-widest text-slate-500">EXERCISE</p>
+                <p className="mt-1 text-sm font-black text-white">운동 변경</p>
+              </div>
+              <span className="text-[10px] font-bold text-slate-500">좌우로 넘겨보세요</span>
+            </div>
+            <div className="mb-3 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] md:grid md:grid-cols-3 md:overflow-visible md:pb-0 lg:grid-cols-5 [&::-webkit-scrollbar]:hidden">
               {SUPPORTED_EXERCISES.map(({ type }) => (
                   <button
                     key={type}
                     onClick={() => handleExerciseChange(type)}
                     disabled={isWorkoutStarted}
-                    className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition duration-300 hover:-translate-y-1 ${
+                    className={`group relative min-w-[132px] shrink-0 overflow-hidden rounded-2xl border p-3 text-left transition duration-300 hover:-translate-y-1 sm:min-w-0 sm:p-4 ${
                       selectedExercise === type
                         ? 'border-cyan-300/70 bg-cyan-400/10 shadow-[0_20px_50px_rgba(0,255,204,0.10)]'
                         : 'border-white/10 bg-black/20 hover:border-white/20 hover:bg-white/[0.045]'
@@ -1740,7 +1747,7 @@ function WorkoutView({
                 </div>
               </div>
 
-              <div className="rounded-xl bg-slate-950 px-4 py-3">
+              <div className="w-full rounded-xl bg-slate-950 px-3.5 py-2.5 sm:w-auto sm:max-w-[28rem] sm:px-4 sm:py-3">
                 <p className="text-[10px] font-bold tracking-widest text-slate-500">
                   TODAY GUIDE
                 </p>
@@ -1752,7 +1759,7 @@ function WorkoutView({
             </div>
           </div>
 
-          <div className="group relative aspect-video w-full overflow-hidden rounded-[2rem] border border-white/10 bg-black shadow-[0_30px_100px_rgba(0,0,0,0.55)] ring-1 ring-cyan-300/5 md:aspect-[4/3]">
+          <div className="group relative order-first aspect-[4/3] w-full overflow-hidden rounded-[1.25rem] border border-white/10 bg-black shadow-[0_20px_65px_rgba(0,0,0,0.5)] ring-1 ring-cyan-300/5 sm:rounded-[2rem] sm:shadow-[0_30px_100px_rgba(0,0,0,0.55)] md:aspect-[4/3]">
             <video
               ref={videoRef}
               className="absolute left-0 top-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.015]"
@@ -1864,7 +1871,7 @@ function WorkoutView({
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <div className="rounded-2xl border border-white/10 bg-black/60 px-3 py-2.5 backdrop-blur-xl">
                       <p className="text-[9px] font-bold text-slate-500">TIME</p>
                       <p className="text-sm font-black">
@@ -1897,7 +1904,7 @@ function WorkoutView({
 
                 {!isWorkoutStarted && !isGoalReached && (
                   <div className="absolute inset-0 z-30 flex items-center justify-center bg-[#05070a]/70 p-5 backdrop-blur-md">
-                    <div className="w-full max-w-md rounded-[2rem] border border-white/10 bg-[#090d13]/95 p-5 text-center shadow-[0_30px_100px_rgba(0,0,0,0.65)] sm:p-8">
+                    <div className="w-full max-w-md rounded-[1.5rem] border border-white/10 bg-[#090d13]/95 p-4 text-center shadow-[0_30px_100px_rgba(0,0,0,0.65)] sm:rounded-[2rem] sm:p-8">
                       <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-400/10 text-3xl sm:h-16 sm:w-16 sm:text-4xl">
                         {config.icon}
                       </div>
@@ -1906,7 +1913,7 @@ function WorkoutView({
                         <span className="h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(103,232,249,0.9)]" />
                         READY TO WORKOUT
                       </div>
-                      <h2 className="mt-1 text-xl font-black sm:mt-2 sm:text-2xl">
+                      <h2 className="mt-1 text-lg font-black sm:mt-2 sm:text-2xl">
                         {config.shortName}
                       </h2>
 
@@ -2040,12 +2047,12 @@ function WorkoutView({
           </div>
         </section>
 
-        <aside className="space-y-4">
-          <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.035] p-5 shadow-[0_18px_55px_rgba(0,0,0,0.20)] backdrop-blur-xl">
-            <p className="text-xs font-black tracking-widest text-cyan-400">
+        <aside className="order-last space-y-4">
+          <div className="rounded-[1.15rem] border border-white/10 bg-white/[0.035] p-3.5 shadow-[0_18px_55px_rgba(0,0,0,0.18)] backdrop-blur-xl sm:rounded-[1.5rem] sm:p-5">
+            <p className="text-[10px] font-black tracking-widest text-cyan-400 sm:text-xs">
               LIVE ANALYSIS
             </p>
-            <h2 className="mt-2 text-lg font-black">
+            <h2 className="mt-1.5 text-base font-black sm:mt-2 sm:text-lg">
               실시간 자세 상태
             </h2>
 
@@ -2102,7 +2109,7 @@ function WorkoutView({
           </div>
 
           {showHistory === 'none' ? (
-            <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.035] p-5 shadow-[0_18px_55px_rgba(0,0,0,0.20)] backdrop-blur-xl">
+            <div className="hidden rounded-[1.5rem] border border-white/10 bg-white/[0.035] p-5 lg:block shadow-[0_18px_55px_rgba(0,0,0,0.20)] backdrop-blur-xl">
               <p className="text-xs font-black tracking-widest text-cyan-400">
                 HOW IT WORKS
               </p>
@@ -2143,7 +2150,7 @@ function WorkoutView({
               </div>
             </div>
           ) : (
-            <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.035] p-5 shadow-[0_18px_55px_rgba(0,0,0,0.20)] backdrop-blur-xl">
+            <div className="rounded-[1.25rem] border border-white/10 bg-white/[0.035] p-4 shadow-[0_18px_55px_rgba(0,0,0,0.18)] backdrop-blur-xl sm:rounded-[1.5rem] sm:p-5">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <p className="text-xs font-black tracking-widest text-cyan-400">
