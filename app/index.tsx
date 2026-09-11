@@ -28,6 +28,8 @@ interface WorkoutRecord {
   score: number;
   duration: number;
   date: string;
+  timestamp?: number;
+  dateKey?: string;
 }
 
 interface WorkoutStats {
@@ -43,6 +45,8 @@ interface WorkoutStats {
   }>;
   dailyData: Array<{ date: string; count: number; totalReps: number; avgScore: number }>;
   weeklyData: Array<{ week: string; count: number; totalReps: number; avgScore: number }>;
+  currentStreak: number;
+  bestScore: number;
 }
 
 interface Challenge {
@@ -54,11 +58,18 @@ interface Challenge {
   icon: string;
 }
 
-interface ChallengeProgress {
-  challengeId: string;
-  completedDate: string;
-  completed: boolean;
-  progress: number;
+
+function getLocalDateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getRecordDateKey(record: WorkoutRecord) {
+  if (record.dateKey) return record.dateKey;
+  if (record.timestamp) return getLocalDateKey(new Date(record.timestamp));
+  return record.date.split(' ')[0] ?? '';
 }
 
 function calculateStats(history: WorkoutRecord[]): WorkoutStats {
@@ -71,41 +82,89 @@ function calculateStats(history: WorkoutRecord[]): WorkoutStats {
       exerciseStats: {},
       dailyData: [],
       weeklyData: [],
+      currentStreak: 0,
+      bestScore: 0,
     };
   }
 
-  const exerciseStats: Record<string, any> = {};
+  type ExerciseStatAccumulator = {
+    count: number;
+    totalReps: number;
+    totalScore: number;
+    totalDuration: number;
+    avgScore: number;
+  };
+  type DailyStatAccumulator = { count: number; totalReps: number; totalScore: number };
+
+  const exerciseStats: Record<string, ExerciseStatAccumulator> = {};
+  const dailyMap: Record<string, DailyStatAccumulator> = {};
   let totalReps = 0;
   let totalScore = 0;
   let totalDuration = 0;
-  const dailyMap: Record<string, any> = {};
-  const weeklyMap: Record<string, any> = {};
+  let bestScore = 0;
 
   history.forEach((record) => {
     totalReps += record.reps;
     totalScore += record.score;
     totalDuration += record.duration;
+    bestScore = Math.max(bestScore, record.score);
 
     if (!exerciseStats[record.exercise]) {
-      exerciseStats[record.exercise] = { count: 0, totalReps: 0, totalScore: 0, totalDuration: 0 };
+      exerciseStats[record.exercise] = {
+        count: 0,
+        totalReps: 0,
+        totalScore: 0,
+        totalDuration: 0,
+        avgScore: 0,
+      };
     }
+
     exerciseStats[record.exercise].count += 1;
     exerciseStats[record.exercise].totalReps += record.reps;
     exerciseStats[record.exercise].totalScore += record.score;
     exerciseStats[record.exercise].totalDuration += record.duration;
 
-    const dateStr = record.date.split(' ')[0];
-    if (!dailyMap[dateStr]) {
-      dailyMap[dateStr] = { count: 0, totalReps: 0, totalScore: 0 };
+    const dateKey = getRecordDateKey(record);
+    if (!dateKey) return;
+
+    if (!dailyMap[dateKey]) {
+      dailyMap[dateKey] = { count: 0, totalReps: 0, totalScore: 0 };
     }
-    dailyMap[dateStr].count += 1;
-    dailyMap[dateStr].totalReps += record.reps;
-    dailyMap[dateStr].totalScore += record.score;
+
+    dailyMap[dateKey].count += 1;
+    dailyMap[dateKey].totalReps += record.reps;
+    dailyMap[dateKey].totalScore += record.score;
   });
 
   Object.keys(exerciseStats).forEach((key) => {
-    exerciseStats[key].avgScore = Math.round(exerciseStats[key].totalScore / exerciseStats[key].count);
+    const item = exerciseStats[key];
+    item.avgScore = Math.round(item.totalScore / Math.max(1, item.count));
   });
+
+  const lastSevenDays = Array.from({ length: 7 }, (_, index) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - index));
+    return getLocalDateKey(d);
+  });
+
+  const weeklyData = lastSevenDays.map((date) => {
+    const item = dailyMap[date] ?? { count: 0, totalReps: 0, totalScore: 0 };
+    return {
+      week: date,
+      count: item.count,
+      totalReps: item.totalReps,
+      avgScore: item.count ? Math.round(item.totalScore / item.count) : 0,
+    };
+  });
+
+  let currentStreak = 0;
+  for (let index = 0; index < 365; index += 1) {
+    const d = new Date();
+    d.setDate(d.getDate() - index);
+    const key = getLocalDateKey(d);
+    if ((dailyMap[key]?.count ?? 0) > 0) currentStreak += 1;
+    else break;
+  }
 
   return {
     totalWorkouts: history.length,
@@ -113,13 +172,17 @@ function calculateStats(history: WorkoutRecord[]): WorkoutStats {
     averageScore: Math.round(totalScore / history.length),
     totalDuration,
     exerciseStats,
-    dailyData: Object.entries(dailyMap).map(([date, data]) => ({
-      date,
-      count: data.count,
-      totalReps: data.totalReps,
-      avgScore: Math.round(data.totalScore / data.count),
-    })),
-    weeklyData: [],
+    dailyData: Object.entries(dailyMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, data]) => ({
+        date,
+        count: data.count,
+        totalReps: data.totalReps,
+        avgScore: Math.round(data.totalScore / Math.max(1, data.count)),
+      })),
+    weeklyData,
+    currentStreak,
+    bestScore,
   };
 }
 
@@ -332,8 +395,6 @@ const DAILY_CHALLENGES: Challenge[] = [
   { id: 'daily-3', exercise: 'LUNGE', targetReps: 20, reward: '🏆 +50P', difficulty: 'medium', icon: '🏃' },
   { id: 'daily-4', exercise: 'SITUP', targetReps: 25, reward: '🏆 +50P', difficulty: 'medium', icon: '🔥' },
   { id: 'daily-5', exercise: 'JUMPING_JACK', targetReps: 30, reward: '🏆 +50P', difficulty: 'hard', icon: '⭐' },
-  { id: 'daily-6', exercise: 'PLANK', targetReps: 60, reward: '🏆 +75P', difficulty: 'hard', icon: '📏' },
-  { id: 'daily-7', exercise: 'BURPEE', targetReps: 15, reward: '🏆 +75P', difficulty: 'hard', icon: '💥' },
 ];
 
 const EXERCISE_SEARCH_ALIASES: Record<ExerciseType, string[]> = {
@@ -535,7 +596,7 @@ function CatalogView({
       //    한국어 별칭으로 반드시 검색되도록 가상 결과를 하나씩 추가합니다.
       //    따라서 다음 검색이 모두 같은 푸시업을 찾습니다.
       //    '푸', '쉬', '푸쉬', '팔굽혀펴'
-      const aiMatches = (Object.keys(EXERCISE_CONFIGS) as ExerciseType[])
+      const aiMatches = SUPPORTED_EXERCISES.map((item) => item.type)
         .filter((type) => {
           const aliases = EXERCISE_SEARCH_ALIASES[type].map(normalizeSearchText);
           return aliases.some(
@@ -607,7 +668,7 @@ function CatalogView({
   };
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#07090d] text-white font-sans selection:bg-cyan-400/30">
+    <main className="min-h-screen bg-[#07090d] text-white font-sans selection:bg-cyan-400/30">
       <header className="relative mx-auto max-w-7xl px-5 pb-5 pt-8 sm:px-8 sm:pt-10">
         <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 shadow-[0_0_30px_rgba(34,211,238,0.06)]"><span className="h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(103,232,249,0.8)]" /><span className="text-[10px] font-black tracking-[0.24em] text-cyan-300">CHOWIFIT AI FITNESS</span></div>
         <h1 className="mt-5 max-w-3xl text-4xl font-black leading-[1.05] tracking-[-0.04em] sm:text-6xl">
@@ -917,7 +978,6 @@ function WorkoutView({
   const [isWorkoutStarted, setIsWorkoutStarted] = useState(false);
   const [showHistory, setShowHistory] = useState<'none' | 'history' | 'stats'>('none');
   const [cameraStarted, setCameraStarted] = useState(false);
-  const [challengeProgress, setChallengeProgress] = useState<Record<string, ChallengeProgress>>({});
   const [todayChallenge, setTodayChallenge] = useState<Challenge | null>(null);
   const [feedbackVisible, setFeedbackVisible] = useState(true);
   const [lastScore, setLastScore] = useState<number | null>(null);
@@ -977,8 +1037,30 @@ function WorkoutView({
     reps > 0
       ? Math.min(100, Math.round((goodReps / reps) * 100))
       : 0;
+  const correctionReps = Math.max(0, reps - goodReps);
+  const previousBestScore = useMemo(
+    () =>
+      history
+        .filter((record) => record.exercise === config.shortName)
+        .reduce((best, record) => Math.max(best, record.score), 0),
+    [history, config.shortName]
+  );
 
   const stats = useMemo(() => calculateStats(history), [history]);
+
+  const todayChallengeReps = useMemo(() => {
+    if (!todayChallenge) return 0;
+    const todayKey = getLocalDateKey();
+    const exerciseName = EXERCISE_CONFIGS[todayChallenge.exercise].shortName;
+
+    return history
+      .filter((record) => getRecordDateKey(record) === todayKey && record.exercise === exerciseName)
+      .reduce((sum, record) => sum + record.goodReps, 0);
+  }, [history, todayChallenge]);
+
+  const todayChallengeCompleted = Boolean(
+    todayChallenge && todayChallengeReps >= todayChallenge.targetReps
+  );
 
   useEffect(() => {
     try {
@@ -990,25 +1072,35 @@ function WorkoutView({
   }, []);
 
   useEffect(() => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateKey();
     try {
       const savedChallenge = localStorage.getItem('chowifit-challenge');
-      const parsed = savedChallenge ? JSON.parse(savedChallenge) : { date: null, progress: {} };
+      const parsed = savedChallenge
+        ? JSON.parse(savedChallenge) as {
+            date?: string;
+            challengeId?: string;
+            progress?: Record<string, unknown>;
+          }
+        : {};
 
-      if (parsed.date !== today) {
-        const randomChallenge = DAILY_CHALLENGES[Math.floor(Math.random() * DAILY_CHALLENGES.length)];
-        localStorage.setItem('chowifit-challenge', JSON.stringify({ date: today, progress: {} }));
-        setTodayChallenge(randomChallenge);
-        setChallengeProgress({});
-      } else {
-        const randomChallenge = DAILY_CHALLENGES[Math.floor(Math.random() * DAILY_CHALLENGES.length)];
-        setTodayChallenge(randomChallenge);
-        setChallengeProgress(parsed.progress || {});
+      const savedChallengeItem = parsed.challengeId
+        ? DAILY_CHALLENGES.find((challenge) => challenge.id === parsed.challengeId)
+        : null;
+
+      if (parsed.date === today && savedChallengeItem) {
+        setTodayChallenge(savedChallengeItem);
+        return;
       }
+
+      const randomChallenge = DAILY_CHALLENGES[Math.floor(Math.random() * DAILY_CHALLENGES.length)];
+      setTodayChallenge(randomChallenge);
+      localStorage.setItem(
+        'chowifit-challenge',
+        JSON.stringify({ date: today, challengeId: randomChallenge.id, progress: {} })
+      );
     } catch {
       const randomChallenge = DAILY_CHALLENGES[Math.floor(Math.random() * DAILY_CHALLENGES.length)];
       setTodayChallenge(randomChallenge);
-      setChallengeProgress({});
     }
   }, []);
 
@@ -1041,6 +1133,8 @@ function WorkoutView({
         hour: '2-digit',
         minute: '2-digit',
       }),
+      timestamp: Date.now(),
+      dateKey: getLocalDateKey(),
     };
 
     setHistory((prev) => {
@@ -1152,7 +1246,7 @@ function WorkoutView({
   };
 
   useEffect(() => {
-    if (!isScriptLoaded) return;
+    if (!isScriptLoaded || !cameraStarted) return;
 
     let animationFrameId: number | null = null;
     let poseInstance: any = null;
@@ -1312,9 +1406,13 @@ function WorkoutView({
                 if (isDownRef.current && !isGoodForm) wasFormGoodDuringDownRef.current = false;
 
                 if (upCondition && isDownRef.current && now - downTimestampRef.current > 200) {
+                  const completedWithGoodForm = wasFormGoodDuringDownRef.current;
                   setReps((prev) => prev + 1);
-                  setGoodReps((prev) => prev + 1);
+                  if (completedWithGoodForm) {
+                    setGoodReps((prev) => prev + 1);
+                  }
                   isDownRef.current = false;
+                  wasFormGoodDuringDownRef.current = true;
                 }
               }
 
@@ -1487,10 +1585,10 @@ function WorkoutView({
         videoRef.current.srcObject = null;
       }
     };
-  }, [isScriptLoaded]);
+  }, [isScriptLoaded, cameraStarted]);
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#07090d] text-white font-sans selection:bg-cyan-400/30">
+    <main className="min-h-screen bg-[#07090d] text-white font-sans selection:bg-cyan-400/30">
       <Script
         src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"
         strategy="afterInteractive"
@@ -1543,19 +1641,19 @@ function WorkoutView({
                   <div className="flex justify-between mb-1">
                     <span className="text-xs font-bold text-slate-300">진행도</span>
                     <span className="text-xs font-black text-cyan-300">
-                      {history.filter(r => r.exercise === EXERCISE_CONFIGS[todayChallenge.exercise].shortName).reduce((sum, r) => sum + r.goodReps, 0)} / {todayChallenge.targetReps}
+                      {Math.min(todayChallengeReps, todayChallenge.targetReps)} / {todayChallenge.targetReps}
                     </span>
                   </div>
                   <div className="h-2 w-40 rounded-full bg-slate-900/50 overflow-hidden border border-cyan-400/20">
                     <div 
                       className="h-full bg-gradient-to-r from-cyan-400 to-cyan-300 transition-all duration-300"
                       style={{
-                        width: `${Math.min(100, (history.filter(r => r.exercise === EXERCISE_CONFIGS[todayChallenge.exercise].shortName).reduce((sum, r) => sum + r.goodReps, 0) / todayChallenge.targetReps) * 100)}%`
+                        width: `${Math.min(100, (todayChallengeReps / todayChallenge.targetReps) * 100)}%`
                       }}
                     />
                   </div>
                 </div>
-                {history.filter(r => r.exercise === EXERCISE_CONFIGS[todayChallenge.exercise].shortName).reduce((sum, r) => sum + r.goodReps, 0) >= todayChallenge.targetReps ? (
+                {todayChallengeCompleted ? (
                   <div className="rounded-full bg-emerald-400/20 border border-emerald-400/40 px-3 py-1 text-xs font-black text-emerald-300">✅ 완료!</div>
                 ) : (
                   <button 
@@ -1583,8 +1681,7 @@ function WorkoutView({
             </div>
             <div className="p-4 sm:p-5">
             <div className="mb-4 hidden grid-cols-3 gap-3 md:grid lg:grid-cols-5">
-              {(Object.keys(EXERCISE_CONFIGS) as ExerciseType[]).map(
-                (type) => (
+              {SUPPORTED_EXERCISES.map(({ type }) => (
                   <button
                     key={type}
                     onClick={() => handleExerciseChange(type)}
@@ -1616,6 +1713,7 @@ function WorkoutView({
                 </p>
                 <div className="mt-1 flex items-center gap-2">
                   <button
+                    aria-label="목표 횟수 줄이기"
                     onClick={() => {
                       if (isWorkoutStarted) return;
                       setTargetReps((prev) => Math.max(1, prev - 1));
@@ -1629,6 +1727,7 @@ function WorkoutView({
                     {targetReps}
                   </span>
                   <button
+                    aria-label="목표 횟수 늘리기"
                     onClick={() => {
                       if (isWorkoutStarted) return;
                       setTargetReps((prev) => prev + 1);
@@ -1748,9 +1847,11 @@ function WorkoutView({
                         : 'border-rose-400 bg-rose-400/15 text-rose-300'
                     }`}
                   >
-                    {isGoodFormUI
-                      ? '● GOOD FORM'
-                      : '● CHECK POSTURE'}
+                    {!isLoaded
+                      ? '● AI 준비 중'
+                      : isGoodFormUI
+                        ? '● GOOD FORM'
+                        : '● CHECK POSTURE'}
                   </div>
                 </div>
 
@@ -1774,11 +1875,18 @@ function WorkoutView({
                     <div className="rounded-2xl border border-white/10 bg-black/60 px-3 py-2.5 backdrop-blur-xl">
                       <p className="text-[9px] font-bold text-cyan-400">POSTURE</p>
                       <p className="text-sm font-black text-cyan-400">
-                        {isGoodFormUI ? '좋아요' : '조금만 수정'}
+                        {isGoodFormUI ? '좋아요' : '교정 필요'}
                       </p>
                     </div>
 
-                    <div className="ml-auto hidden rounded-2xl border border-white/10 bg-black/55 px-3 py-2.5 text-right backdrop-blur-xl transition-all duration-300 hover:border-cyan-400/50 hover:bg-black/40 sm:block">
+                    <div className="hidden rounded-2xl border border-white/10 bg-black/60 px-3 py-2.5 backdrop-blur-xl sm:block">
+                      <p className="text-[9px] font-bold text-slate-500">ANGLE</p>
+                      <p className="text-sm font-black text-white">
+                        {currentAngle !== null ? `${currentAngle}°` : '--'}
+                      </p>
+                    </div>
+
+                    <div className="ml-auto hidden rounded-2xl border border-white/10 bg-black/55 px-3 py-2.5 text-right backdrop-blur-xl transition-all duration-300 hover:border-cyan-400/50 hover:bg-black/40 lg:block">
                       <p className="text-[9px] font-bold text-cyan-400/70">💡 TIP</p>
                       <p className="hidden max-w-[150px] truncate text-[10px] text-slate-200 sm:block">
                         {config.guideText}
@@ -1802,12 +1910,21 @@ function WorkoutView({
                         {config.shortName}
                       </h2>
 
-                      <div className="mt-3 rounded-2xl border border-white/5 bg-black/25 p-3 sm:mt-5 sm:p-4">
-                        <p className="text-[10px] font-black tracking-widest text-slate-500">TODAY'S TARGET</p>
-                        <p className="mt-1 text-2xl font-black text-white sm:text-3xl">
-                          {targetReps}
-                          <span className="ml-1 text-xs text-slate-500 sm:text-sm">회</span>
-                        </p>
+                      <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-5">
+                        <div className="rounded-2xl border border-white/5 bg-black/25 p-3">
+                          <p className="text-[9px] font-black tracking-widest text-slate-500">TODAY'S TARGET</p>
+                          <p className="mt-1 text-2xl font-black text-white sm:text-3xl">
+                            {targetReps}
+                            <span className="ml-1 text-xs text-slate-500 sm:text-sm">회</span>
+                          </p>
+                        </div>
+                        <div className="rounded-2xl border border-white/5 bg-black/25 p-3">
+                          <p className="text-[9px] font-black tracking-widest text-slate-500">BEST SCORE</p>
+                          <p className="mt-1 text-2xl font-black text-cyan-300 sm:text-3xl">
+                            {previousBestScore || '--'}
+                            {previousBestScore > 0 && <span className="ml-1 text-xs text-slate-500">점</span>}
+                          </p>
+                        </div>
                       </div>
 
                       <div className="mt-2 hidden flex-col items-start gap-3 rounded-2xl border border-slate-800 bg-slate-950 p-4 text-left sm:mt-4 sm:flex">
@@ -1845,31 +1962,38 @@ function WorkoutView({
                         운동 완료!
                       </h2>
 
-                      <div className="mt-6 grid grid-cols-3 gap-2">
+                      <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
                         <div className="rounded-2xl bg-slate-950 p-3">
-                          <p className="text-[10px] text-slate-500">
-                            횟수
-                          </p>
-                          <p className="mt-1 text-xl font-black">
-                            {goodReps}
-                          </p>
+                          <p className="text-[10px] text-slate-500">총 반복</p>
+                          <p className="mt-1 text-xl font-black">{reps}</p>
                         </div>
                         <div className="rounded-2xl bg-slate-950 p-3">
-                          <p className="text-[10px] text-slate-500">
-                            자세 점수
-                          </p>
-                          <p className="mt-1 text-xl font-black text-cyan-400">
-                            {score}
-                          </p>
+                          <p className="text-[10px] text-slate-500">정확한 자세</p>
+                          <p className="mt-1 text-xl font-black text-cyan-400">{goodReps}</p>
                         </div>
                         <div className="rounded-2xl bg-slate-950 p-3">
-                          <p className="text-[10px] text-slate-500">
-                            운동 시간
-                          </p>
-                          <p className="mt-1 text-xl font-black">
-                            {formatTime(elapsedSeconds)}
-                          </p>
+                          <p className="text-[10px] text-slate-500">교정 필요</p>
+                          <p className="mt-1 text-xl font-black text-rose-300">{correctionReps}</p>
                         </div>
+                        <div className="rounded-2xl bg-slate-950 p-3">
+                          <p className="text-[10px] text-slate-500">운동 시간</p>
+                          <p className="mt-1 text-xl font-black">{formatTime(elapsedSeconds)}</p>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 rounded-2xl border border-cyan-400/10 bg-cyan-400/5 p-4 text-left">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-black text-slate-300">자세 분석 결과</span>
+                          <span className="text-sm font-black text-cyan-300">{score} / 100</span>
+                        </div>
+                        <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-950">
+                          <div className="h-full rounded-full bg-cyan-300 transition-all duration-700" style={{ width: `${score}%` }} />
+                        </div>
+                        <p className="mt-2 text-[11px] leading-5 text-slate-400">
+                          {reps - goodReps > 0
+                            ? `전체 ${reps}회 중 ${reps - goodReps}회는 자세 교정이 필요했어요.`
+                            : '모든 반복에서 안정적인 자세를 유지했어요.'}
+                        </p>
                       </div>
 
                       <p className="mt-5 text-sm text-slate-300">
@@ -1930,42 +2054,46 @@ function WorkoutView({
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-black tracking-widest text-slate-500">AI ANALYSIS</span>
                   <span className={`rounded-full px-2 py-1 text-[9px] font-black ${isLoaded ? 'bg-emerald-400/10 text-emerald-300' : 'bg-amber-400/10 text-amber-300'}`}>
-                    {isLoaded ? '● LIVE' : '● 준비 중'}
+                    {!cameraStarted ? '● 시작 대기' : isLoaded ? '● LIVE' : '● 연결 중'}
                   </span>
                 </div>
                 <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/5">
-                  <div className={`h-full rounded-full transition-all duration-500 ${isLoaded ? 'w-full bg-cyan-300 shadow-[0_0_18px_rgba(103,232,249,0.55)]' : 'w-1/3 bg-amber-300'}`} />
+                  <div className={`h-full rounded-full transition-all duration-500 ${!cameraStarted ? 'w-0' : isLoaded ? 'w-full bg-cyan-300 shadow-[0_0_18px_rgba(103,232,249,0.55)]' : 'w-1/3 bg-amber-300'}`} />
                 </div>
               </div>
 
-              <div className="flex items-center justify-between rounded-xl bg-slate-950 p-3">
-                <span className="text-xs text-slate-400">
-                  현재 자세
-                </span>
-                <span
-                  className={`text-xs font-bold ${
-                    isGoodFormUI
-                      ? 'text-emerald-400'
-                      : 'text-rose-400'
-                  }`}
-                >
-                  {isGoodFormUI ? '좋음' : '교정 필요'}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between rounded-xl bg-slate-950 p-3">
-                <span className="text-xs text-slate-400">
-                  관절 각도
-                </span>
-                <span className="text-xs font-bold text-slate-200">
-                  {isGoodFormUI ? '안정적이에요' : '조금 수정해보세요'}
-                </span>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl bg-slate-950 p-3">
+                  <p className="text-[10px] text-slate-500">현재 자세</p>
+                  <p className={`mt-1 text-sm font-black ${isGoodFormUI ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {isGoodFormUI ? '좋음' : '교정 필요'}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-slate-950 p-3">
+                  <p className="text-[10px] text-slate-500">자세 점수</p>
+                  <p className="mt-1 text-sm font-black text-cyan-300">
+                    {reps > 0 ? `${score}점` : '--'}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-slate-950 p-3">
+                  <p className="text-[10px] text-slate-500">관절 각도</p>
+                  <p className="mt-1 text-sm font-black text-slate-200">
+                    {currentAngle !== null ? `${currentAngle}°` : '--'}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-slate-950 p-3">
+                  <p className="text-[10px] text-slate-500">정확한 반복</p>
+                  <p className="mt-1 text-sm font-black text-cyan-300">
+                    {goodReps} / {reps}
+                  </p>
+                </div>
               </div>
 
               <div className="rounded-2xl border border-white/5 bg-black/20 p-3">
-                <p className="text-[10px] font-bold text-slate-500">
-                  COACHING TIP
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-bold text-slate-500">COACHING TIP</p>
+                  <span className="text-[9px] font-bold text-cyan-400">LIVE</span>
+                </div>
                 <p className="mt-1 text-xs leading-5 text-slate-300">
                   {feedback}
                 </p>
@@ -2067,20 +2195,54 @@ function WorkoutView({
                           <p className="mt-1 text-xl font-black text-cyan-300">{stats.averageScore.toFixed(1)}</p>
                         </div>
                         <div className="rounded-xl border border-white/5 bg-black/20 p-3">
-                          <p className="text-[10px] text-slate-500">총 횟수</p>
+                          <p className="text-[10px] text-slate-500">총 반복 수</p>
                           <p className="mt-1 text-xl font-black text-cyan-300">{stats.totalReps}</p>
                         </div>
                         <div className="rounded-xl border border-white/5 bg-black/20 p-3">
                           <p className="text-[10px] text-slate-500">총 시간</p>
                           <p className="mt-1 text-xl font-black text-cyan-300">{formatTime(stats.totalDuration)}</p>
                         </div>
+                        <div className="rounded-xl border border-white/5 bg-black/20 p-3">
+                          <p className="text-[10px] text-slate-500">연속 운동</p>
+                          <p className="mt-1 text-xl font-black text-cyan-300">{stats.currentStreak}일</p>
+                        </div>
+                        <div className="rounded-xl border border-white/5 bg-black/20 p-3">
+                          <p className="text-[10px] text-slate-500">최고 점수</p>
+                          <p className="mt-1 text-xl font-black text-cyan-300">{stats.bestScore}점</p>
+                        </div>
                       </div>
+
+                      {stats.dailyData.length > 0 && (
+                        <div className="rounded-xl border border-white/5 bg-black/20 p-3">
+                          <div className="flex items-end justify-between">
+                            <div>
+                              <p className="text-xs font-black text-slate-300">최근 운동량</p>
+                              <p className="mt-1 text-[10px] text-slate-500">기록된 운동을 날짜별로 확인해요</p>
+                            </div>
+                            <span className="text-[10px] font-bold text-cyan-300">최근 {Math.min(7, stats.dailyData.length)}일</span>
+                          </div>
+                          <div className="mt-4 flex h-24 items-end gap-2">
+                            {stats.dailyData.slice(-7).map((day) => {
+                              const maxReps = Math.max(...stats.dailyData.slice(-7).map((item) => item.totalReps), 1);
+                              const height = Math.max(10, Math.round((day.totalReps / maxReps) * 100));
+                              return (
+                                <div key={day.date} className="flex flex-1 flex-col items-center gap-1">
+                                  <div className="flex h-16 w-full items-end rounded-lg bg-slate-950/70 px-1">
+                                    <div className="w-full rounded-md bg-cyan-400/80 transition-all" style={{ height: `${height}%` }} title={`${day.totalReps}회`} />
+                                  </div>
+                                  <span className="text-[8px] text-slate-600">{day.date}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
 
                       {Object.entries(stats.exerciseStats).length > 0 && (
                         <div className="rounded-xl border border-white/5 bg-black/20 p-3">
                           <p className="text-xs font-black text-slate-300 mb-3">운동별 통계</p>
                           <div className="space-y-2">
-                            {Object.entries(stats.exerciseStats).map(([exercise, data]) => (
+                            {(Object.entries(stats.exerciseStats) as [string, WorkoutStats['exerciseStats'][string]][]).map(([exercise, data]) => (
                               <div key={exercise} className="flex items-center justify-between text-xs">
                                 <span className="text-slate-400">{exercise}</span>
                                 <div className="flex gap-3">
@@ -2106,8 +2268,10 @@ function WorkoutView({
                       <div className="flex justify-end mb-2">
                         <button
                           onClick={() => {
-                            setHistory([]);
-                            localStorage.removeItem(STORAGE_KEY);
+                            if (window.confirm('모든 운동 기록을 삭제할까요?')) {
+                              setHistory([]);
+                              localStorage.removeItem(STORAGE_KEY);
+                            }
                           }}
                           className="text-[10px] text-slate-500 hover:text-rose-400"
                         >
