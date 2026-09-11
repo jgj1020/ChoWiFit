@@ -28,6 +28,7 @@ interface WorkoutRecord {
   score: number;
   duration: number;
   date: string;
+  timestamp?: number;
 }
 
 interface WorkoutStats {
@@ -432,6 +433,190 @@ async function fetchJson<T>(url: string): Promise<T> {
 /*  운동 목록 화면                                                      */
 /* ================================================================== */
 
+
+function MotionStyles() {
+  return (
+    <style jsx global>{`
+      @keyframes auroraFloat {
+        0%, 100% { transform: translate3d(0, 0, 0) scale(1); opacity: .35; }
+        50% { transform: translate3d(24px, -16px, 0) scale(1.08); opacity: .62; }
+      }
+      @keyframes auroraFloat2 {
+        0%, 100% { transform: translate3d(0, 0, 0) scale(1); opacity: .22; }
+        50% { transform: translate3d(-26px, 18px, 0) scale(1.12); opacity: .48; }
+      }
+      @keyframes shimmer {
+        0% { transform: translateX(-140%) skewX(-18deg); opacity: 0; }
+        12% { opacity: .55; }
+        100% { transform: translateX(340%) skewX(-18deg); opacity: 0; }
+      }
+      @keyframes pulseGlow {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(34,211,238,0), 0 0 22px rgba(34,211,238,.06); }
+        50% { box-shadow: 0 0 0 7px rgba(34,211,238,.025), 0 0 40px rgba(34,211,238,.16); }
+      }
+      @keyframes dotPulse {
+        0%, 100% { transform: scale(.8); opacity: .55; }
+        50% { transform: scale(1.3); opacity: 1; }
+      }
+      @keyframes floatCard {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-4px); }
+      }
+      @keyframes revealUp {
+        0% { opacity: 0; transform: translateY(14px); }
+        100% { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes popIn {
+        0% { opacity: 0; transform: scale(.82); }
+        72% { opacity: 1; transform: scale(1.08); }
+        100% { opacity: 1; transform: scale(1); }
+      }
+      @keyframes scanLine {
+        0% { transform: translateY(-120%); opacity: 0; }
+        10% { opacity: .5; }
+        90% { opacity: .5; }
+        100% { transform: translateY(120%); opacity: 0; }
+      }
+      @keyframes borderPulse {
+        0%, 100% { opacity: .42; }
+        50% { opacity: 1; }
+      }
+      @keyframes spinSlow {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      @keyframes progressSweep {
+        0% { transform: translateX(-140%); }
+        100% { transform: translateX(340%); }
+      }
+      @keyframes orbit {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      @keyframes orbitReverse {
+        from { transform: rotate(360deg); }
+        to { transform: rotate(0deg); }
+      }
+      @keyframes neonBreath {
+        0%, 100% { opacity: .45; transform: scale(.98); }
+        50% { opacity: 1; transform: scale(1.02); }
+      }
+      @keyframes scanGlow {
+        0%, 100% { opacity: .18; }
+        50% { opacity: .8; }
+      }
+      @keyframes slideShine {
+        0% { left: -40%; opacity: 0; }
+        15% { opacity: .65; }
+        100% { left: 130%; opacity: 0; }
+      }
+      @keyframes numberPunch {
+        0% { transform: scale(.88); opacity: .5; }
+        55% { transform: scale(1.08); opacity: 1; }
+        100% { transform: scale(1); opacity: 1; }
+      }
+      @keyframes cardEnter {
+        0% { opacity: 0; transform: translateY(18px) scale(.985); }
+        100% { opacity: 1; transform: translateY(0) scale(1); }
+      }
+      .cf-orbit { animation: orbit 16s linear infinite; }
+      .cf-orbit-reverse { animation: orbitReverse 21s linear infinite; }
+      .cf-breathe { animation: neonBreath 3s ease-in-out infinite; }
+      .cf-scan-glow { animation: scanGlow 2.4s ease-in-out infinite; }
+      .cf-number { animation: numberPunch .36s cubic-bezier(.22,1,.36,1); }
+      .cf-enter { animation: cardEnter .6s cubic-bezier(.22,1,.36,1) both; }
+      .cf-premium-card {
+        position: relative;
+        overflow: hidden;
+        isolation: isolate;
+      }
+      .cf-premium-card::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        padding: 1px;
+        background: linear-gradient(135deg, rgba(103,232,249,.35), transparent 34%, transparent 66%, rgba(59,130,246,.22));
+        -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+        -webkit-mask-composite: xor;
+        mask-composite: exclude;
+        pointer-events: none;
+      }
+      .cf-premium-card::after {
+        content: '';
+        position: absolute;
+        width: 32%;
+        height: 100%;
+        top: 0;
+        left: -40%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,.14), transparent);
+        transform: skewX(-16deg);
+        animation: slideShine 5s ease-in-out infinite;
+        pointer-events: none;
+      }
+      .cf-camera-frame {
+        position: relative;
+        box-shadow: 0 25px 80px rgba(0,0,0,.55), 0 0 0 1px rgba(103,232,249,.08), inset 0 0 50px rgba(34,211,238,.04);
+      }
+      .cf-camera-frame::before {
+        content: '';
+        position: absolute;
+        inset: 10px;
+        border-radius: 24px;
+        border: 1px solid rgba(103,232,249,.08);
+        pointer-events: none;
+        z-index: 8;
+      }
+      .cf-grid-overlay {
+        background-image: linear-gradient(rgba(103,232,249,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(103,232,249,.06) 1px, transparent 1px);
+        background-size: 32px 32px;
+        mask-image: linear-gradient(to bottom, transparent, #000 24%, #000 76%, transparent);
+      }
+      .cf-glass {
+        background: linear-gradient(180deg, rgba(15,23,42,.58), rgba(2,6,23,.48));
+        backdrop-filter: blur(18px);
+      }
+      .cf-shadow-text { text-shadow: 0 0 30px rgba(34,211,238,.16); }
+      .cf-aurora { animation: auroraFloat 7s ease-in-out infinite; }
+      .cf-aurora-2 { animation: auroraFloat2 9s ease-in-out infinite; }
+      .cf-float { animation: floatCard 5s ease-in-out infinite; }
+      .cf-reveal { animation: revealUp .55s cubic-bezier(.22,1,.36,1) both; }
+      .cf-pop { animation: popIn .42s cubic-bezier(.22,1,.36,1) both; }
+      .cf-pulse { animation: pulseGlow 2.8s ease-in-out infinite; }
+      .cf-dot { animation: dotPulse 1.6s ease-in-out infinite; }
+      .cf-scan { animation: scanLine 3.8s ease-in-out infinite; }
+      .cf-border-pulse { animation: borderPulse 2.2s ease-in-out infinite; }
+      .cf-spin { animation: spinSlow 12s linear infinite; }
+      .cf-shimmer { position: relative; overflow: hidden; }
+      .cf-shimmer::after {
+        content: '';
+        position: absolute;
+        inset: 0 auto 0 -28%;
+        width: 24%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,.32), transparent);
+        animation: shimmer 3.2s ease-in-out infinite;
+        pointer-events: none;
+      }
+      .cf-progress { position: relative; overflow: hidden; }
+      .cf-progress::after {
+        content: '';
+        position: absolute;
+        inset: 0 auto 0 -42%;
+        width: 34%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,.25), transparent);
+        animation: progressSweep 2.6s ease-in-out infinite;
+        pointer-events: none;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .cf-aurora, .cf-aurora-2, .cf-float, .cf-reveal, .cf-pop, .cf-pulse,
+        .cf-dot, .cf-scan, .cf-border-pulse, .cf-spin, .cf-shimmer::after,
+        .cf-progress::after, .cf-orbit, .cf-orbit-reverse, .cf-breathe, .cf-scan-glow,
+        .cf-number, .cf-enter, .cf-premium-card::after { animation: none !important; }
+      }
+    `}</style>
+  );
+}
+
 function CatalogView({
   onStart,
 }: {
@@ -607,22 +792,26 @@ function CatalogView({
   };
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#07090d] text-white font-sans selection:bg-cyan-400/30">
+    <main className="relative min-h-screen overflow-x-hidden bg-[#05070b] text-white font-sans selection:bg-cyan-400/30">
+      <MotionStyles />
+      <div className="pointer-events-none absolute inset-0 opacity-30 [background-image:radial-gradient(circle_at_20%_0%,rgba(34,211,238,.10),transparent_28%),radial-gradient(circle_at_90%_22%,rgba(59,130,246,.10),transparent_25%)]" />
+      <div className="pointer-events-none absolute -left-24 top-16 h-72 w-72 rounded-full bg-cyan-400/10 blur-[105px] cf-aurora" />
+      <div className="pointer-events-none absolute right-[-90px] top-[28rem] h-80 w-80 rounded-full bg-blue-500/10 blur-[110px] cf-aurora-2" />
       <header className="relative mx-auto max-w-7xl px-5 pb-5 pt-8 sm:px-8 sm:pt-10">
-        <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 shadow-[0_0_30px_rgba(34,211,238,0.06)]"><span className="h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(103,232,249,0.8)]" /><span className="text-[10px] font-black tracking-[0.24em] text-cyan-300">CHOWIFIT AI FITNESS</span></div>
-        <h1 className="mt-5 max-w-3xl text-4xl font-black leading-[1.05] tracking-[-0.04em] sm:text-6xl">
+        <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-white/[0.04] px-3 py-1.5 shadow-[0_0_30px_rgba(34,211,238,0.06)] cf-pulse"><span className="h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(103,232,249,0.8)] cf-dot" /><span className="text-[10px] font-black tracking-[0.24em] text-cyan-300">CHOWIFIT AI FITNESS</span></div>
+        <h1 className="mt-5 max-w-3xl cf-reveal cf-shadow-text text-4xl font-black leading-[1.05] tracking-[-0.04em] sm:text-6xl">
           오늘의 운동을
           <span className="block bg-gradient-to-r from-cyan-300 via-white to-cyan-100 bg-clip-text text-transparent">더 정확하게.</span>
         </h1>
-        <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-400 sm:text-base">AI가 카메라 속 움직임을 실시간으로 분석해요. 운동을 고르고 목표 횟수만 설정하면 바로 시작할 수 있어요.</p>
-        <div className="mt-6 flex flex-wrap gap-2 text-[10px] font-bold text-slate-400"><span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5">LIVE POSE</span><span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5">REAL-TIME FEEDBACK</span><span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5">WORKOUT HISTORY</span></div>
+        <p className="mt-4 max-w-2xl text-sm cf-reveal leading-6 text-slate-400 sm:text-base">AI가 카메라 속 움직임을 실시간으로 분석해요. 운동을 고르고 목표 횟수만 설정하면 바로 시작할 수 있어요.</p>
+        <div className="mt-6 flex flex-wrap gap-2 text-[10px] font-bold text-slate-400 cf-reveal"><span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5">LIVE POSE</span><span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5">REAL-TIME FEEDBACK</span><span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5">WORKOUT HISTORY</span></div>
       </header>
 
       <div className="relative mx-auto max-w-7xl px-4 pb-16 sm:px-8"><div className="pointer-events-none absolute -top-20 left-1/4 h-72 w-72 rounded-full bg-cyan-400/10 blur-[110px]" /><div className="pointer-events-none absolute right-0 top-80 h-64 w-64 rounded-full bg-blue-500/10 blur-[100px]" />
         {/* ============================================================ */}
         {/* AI 자세 교정 운동 */}
         {/* ============================================================ */}
-        <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.035] p-5 shadow-[0_25px_80px_rgba(0,0,0,0.32)] backdrop-blur-xl sm:p-7">
+        <section className="cf-premium-card relative overflow-hidden rounded-[2rem] border border-cyan-300/10 bg-white/[0.035] p-5 shadow-[0_25px_90px_rgba(0,0,0,0.34)] backdrop-blur-xl sm:p-7 cf-reveal">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5"><span className="text-[9px] font-black tracking-[0.2em] text-cyan-300">AI POSTURE COACH</span><span className="h-1 w-1 rounded-full bg-cyan-300" /></div>
@@ -653,7 +842,7 @@ function CatalogView({
                   key={ex.type}
                   type="button"
                   onClick={() => setSelectedExercise(ex.type)}
-                  className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition duration-300 hover:-translate-y-1 ${
+                  className={`cf-premium-card group relative overflow-hidden rounded-2xl border p-4 text-left transition duration-300 hover:-translate-y-1 hover:scale-[1.015] ${
                     selected
                       ? 'border-cyan-300/70 bg-cyan-400/10 shadow-[0_20px_50px_rgba(0,255,204,0.10)]'
                       : 'border-white/10 bg-black/20 hover:border-white/20 hover:bg-white/[0.045]'
@@ -686,7 +875,7 @@ function CatalogView({
             <button
               type="button"
               onClick={() => onStart(selectedExercise)}
-              className="rounded-2xl bg-white px-6 py-3.5 font-black text-slate-950 shadow-[0_10px_40px_rgba(255,255,255,0.08)] transition hover:-translate-y-0.5 hover:bg-cyan-200"
+              className="cf-shimmer rounded-2xl bg-white px-6 py-3.5 font-black text-slate-950 shadow-[0_10px_40px_rgba(255,255,255,0.08)] transition hover:-translate-y-0.5 hover:scale-[1.02] hover:bg-cyan-200"
             >
               자세 교정 받기 →
             </button>
@@ -949,6 +1138,22 @@ function WorkoutView({
   // MediaPipe는 한 번만 초기화하고, 아래 Ref로 최신 상태를 읽습니다.
   const isGoalReached = goodReps >= targetReps;
 
+  const todayChallengeGoodReps = todayChallenge
+    ? history
+        .filter((record) => {
+          if (!record.timestamp) return false;
+          const recordDate = new Date(record.timestamp);
+          const today = new Date();
+          return (
+            record.exercise === EXERCISE_CONFIGS[todayChallenge.exercise].shortName &&
+            recordDate.getFullYear() === today.getFullYear() &&
+            recordDate.getMonth() === today.getMonth() &&
+            recordDate.getDate() === today.getDate()
+          );
+        })
+        .reduce((sum, record) => sum + record.goodReps, 0)
+    : 0;
+
   const selectedExerciseRef = useRef(selectedExercise);
   const isWorkoutStartedRef = useRef(isWorkoutStarted);
   const isGoalReachedRef = useRef(isGoalReached);
@@ -991,23 +1196,29 @@ function WorkoutView({
 
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
-    try {
-      const savedChallenge = localStorage.getItem('chowifit-challenge');
-      const parsed = savedChallenge ? JSON.parse(savedChallenge) : { date: null, progress: {} };
 
-      if (parsed.date !== today) {
-        const randomChallenge = DAILY_CHALLENGES[Math.floor(Math.random() * DAILY_CHALLENGES.length)];
-        localStorage.setItem('chowifit-challenge', JSON.stringify({ date: today, progress: {} }));
-        setTodayChallenge(randomChallenge);
-        setChallengeProgress({});
-      } else {
-        const randomChallenge = DAILY_CHALLENGES[Math.floor(Math.random() * DAILY_CHALLENGES.length)];
-        setTodayChallenge(randomChallenge);
+    try {
+      const savedChallengeJson = localStorage.getItem('chowifit-challenge');
+      const parsed = savedChallengeJson ? JSON.parse(savedChallengeJson) : null;
+      const savedChallengeId = parsed?.challengeId;
+      const savedChallenge = DAILY_CHALLENGES.find((challenge) => challenge.id === savedChallengeId);
+
+      if (parsed?.date === today && savedChallenge) {
+        setTodayChallenge(savedChallenge);
         setChallengeProgress(parsed.progress || {});
+        return;
       }
+
+      const nextChallenge = DAILY_CHALLENGES[Math.floor(Math.random() * DAILY_CHALLENGES.length)];
+      localStorage.setItem(
+        'chowifit-challenge',
+        JSON.stringify({ date: today, challengeId: nextChallenge.id, progress: {} })
+      );
+      setTodayChallenge(nextChallenge);
+      setChallengeProgress({});
     } catch {
-      const randomChallenge = DAILY_CHALLENGES[Math.floor(Math.random() * DAILY_CHALLENGES.length)];
-      setTodayChallenge(randomChallenge);
+      const nextChallenge = DAILY_CHALLENGES[Math.floor(Math.random() * DAILY_CHALLENGES.length)];
+      setTodayChallenge(nextChallenge);
       setChallengeProgress({});
     }
   }, []);
@@ -1041,6 +1252,7 @@ function WorkoutView({
         hour: '2-digit',
         minute: '2-digit',
       }),
+      timestamp: Date.now(),
     };
 
     setHistory((prev) => {
@@ -1490,77 +1702,80 @@ function WorkoutView({
   }, [isScriptLoaded]);
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#07090d] text-white font-sans selection:bg-cyan-400/30">
+    <main className="relative min-h-screen overflow-x-hidden bg-[#07090d] text-white font-sans selection:bg-cyan-400/30">
+      <MotionStyles />
+      <div className="pointer-events-none absolute -left-16 top-16 h-72 w-72 rounded-full bg-cyan-400/10 blur-[100px] cf-aurora" />
+      <div className="pointer-events-none absolute right-[-100px] top-[26rem] h-96 w-96 rounded-full bg-blue-500/10 blur-[120px] cf-aurora-2" />
       <Script
         src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"
         strategy="afterInteractive"
         onLoad={() => setIsScriptLoaded(true)}
       />
 
-      <header className="mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-8">
+      <header className="mx-auto flex max-w-7xl items-center justify-between px-3 py-3.5 sm:px-8 sm:py-5">
         <div>
           <button
             onClick={onBack}
-            className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[10px] font-black tracking-wide text-slate-400 transition hover:border-cyan-400/30 hover:text-cyan-300"
+            className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[9px] font-black tracking-wide text-slate-400 transition hover:border-cyan-400/30 hover:text-cyan-300 sm:mb-3 sm:px-3 sm:py-1.5 sm:text-[10px]"
           >
             ← 운동 목록으로
           </button>
-          <h1 className="text-2xl font-black tracking-tight text-white">
+          <h1 className="text-xl font-black tracking-tight text-white sm:text-2xl">
             ChoWiFit
-            <span className="ml-2 rounded-full bg-cyan-400/10 px-2.5 py-1 text-[9px] font-black text-cyan-300">LIVE AI</span>
+            <span className="ml-1.5 rounded-full bg-cyan-400/10 px-2 py-0.5 text-[8px] font-black text-cyan-300 sm:ml-2 sm:px-2.5 sm:py-1 sm:text-[9px]">LIVE AI</span>
           </h1>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-0.5 text-[9px] text-slate-400 sm:mt-1 sm:text-xs">
             AI가 운동 자세를 실시간으로 분석해드립니다.
           </p>
         </div>
 
         <button
           onClick={() => setShowHistory(showHistory === 'none' ? 'stats' : 'none')}
-          className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-xs font-bold text-slate-200 transition hover:border-cyan-400/30 hover:text-cyan-300"
+          className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-[10px] font-bold text-slate-200 transition hover:border-cyan-400/30 hover:text-cyan-300 sm:rounded-2xl sm:px-4 sm:py-2.5 sm:text-xs"
         >
           📊 통계
         </button>
       </header>
 
-      <div className="mx-auto grid max-w-7xl gap-5 px-4 pb-10 sm:px-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="mx-auto grid max-w-7xl gap-3 px-3 pb-6 sm:gap-5 sm:px-8 sm:pb-10 lg:grid-cols-[minmax(0,1fr)_320px]">
         {todayChallenge && (
-          <div className="rounded-[1.5rem] border border-cyan-400/30 bg-gradient-to-r from-cyan-400/10 via-cyan-400/5 to-transparent p-5 shadow-[0_20px_60px_rgba(0,255,204,0.15)] backdrop-blur-xl col-span-full">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-400/20 text-4xl">{todayChallenge.icon}</div>
+          <div className="col-span-full rounded-2xl border border-cyan-400/30 bg-gradient-to-r from-cyan-400/10 via-cyan-400/5 to-transparent p-3 shadow-[0_16px_45px_rgba(0,255,204,0.10)] backdrop-blur-xl sm:rounded-[1.5rem] sm:p-5 sm:shadow-[0_20px_60px_rgba(0,255,204,0.15)]">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2.5 sm:gap-4">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-400/20 text-2xl sm:h-14 sm:w-14 sm:rounded-2xl sm:text-4xl">{todayChallenge.icon}</div>
                 <div>
-                  <p className="text-xs font-black tracking-widest text-cyan-300">🔥 오늘의 챌린지</p>
-                  <h3 className="mt-1 text-lg font-black">
+                  <p className="text-[9px] font-black tracking-widest text-cyan-300 sm:text-xs">🔥 오늘의 챌린지</p>
+                  <h3 className="mt-0.5 text-sm font-black sm:mt-1 sm:text-lg">
                     {EXERCISE_CONFIGS[todayChallenge.exercise].shortName} <span className="text-cyan-300">{todayChallenge.targetReps}회</span>
                   </h3>
-                  <p className="mt-1 text-xs text-slate-400">
+                  <p className="mt-0.5 text-[9px] text-slate-400 sm:mt-1 sm:text-xs">
                     미션을 완료하면 {todayChallenge.reward}
                   </p>
                 </div>
               </div>
-              <div className="flex flex-col items-end gap-2">
-                <div className="w-40">
+              <div className="flex shrink-0 flex-col items-end gap-1.5 sm:gap-2">
+                <div className="w-[104px] sm:w-40">
                   <div className="flex justify-between mb-1">
-                    <span className="text-xs font-bold text-slate-300">진행도</span>
-                    <span className="text-xs font-black text-cyan-300">
-                      {history.filter(r => r.exercise === EXERCISE_CONFIGS[todayChallenge.exercise].shortName).reduce((sum, r) => sum + r.goodReps, 0)} / {todayChallenge.targetReps}
+                    <span className="text-[9px] font-bold text-slate-300 sm:text-xs">진행도</span>
+                    <span className="text-[9px] font-black text-cyan-300 sm:text-xs">
+                      {todayChallengeGoodReps} / {todayChallenge.targetReps}
                     </span>
                   </div>
-                  <div className="h-2 w-40 rounded-full bg-slate-900/50 overflow-hidden border border-cyan-400/20">
+                  <div className="h-1.5 w-[104px] rounded-full sm:h-2 sm:w-40 bg-slate-900/50 overflow-hidden border border-cyan-400/20">
                     <div 
                       className="h-full bg-gradient-to-r from-cyan-400 to-cyan-300 transition-all duration-300"
                       style={{
-                        width: `${Math.min(100, (history.filter(r => r.exercise === EXERCISE_CONFIGS[todayChallenge.exercise].shortName).reduce((sum, r) => sum + r.goodReps, 0) / todayChallenge.targetReps) * 100)}%`
+                        width: `${Math.min(100, (todayChallengeGoodReps / todayChallenge.targetReps) * 100)}%`
                       }}
                     />
                   </div>
                 </div>
-                {history.filter(r => r.exercise === EXERCISE_CONFIGS[todayChallenge.exercise].shortName).reduce((sum, r) => sum + r.goodReps, 0) >= todayChallenge.targetReps ? (
+                {todayChallengeGoodReps >= todayChallenge.targetReps ? (
                   <div className="rounded-full bg-emerald-400/20 border border-emerald-400/40 px-3 py-1 text-xs font-black text-emerald-300">✅ 완료!</div>
                 ) : (
                   <button 
                     onClick={() => handleExerciseChange(todayChallenge.exercise)}
-                    className="rounded-full bg-cyan-400 px-4 py-1.5 text-xs font-black text-slate-950 hover:bg-cyan-300 transition"
+                    className="rounded-full bg-cyan-400 px-3 py-1.5 text-[9px] font-black text-slate-950 transition hover:bg-cyan-300 sm:px-4 sm:text-xs"
                   >
                     도전하기
                   </button>
@@ -1570,18 +1785,18 @@ function WorkoutView({
           </div>
         )}
         <section>
-          <div className="mb-4 overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/[0.035] shadow-[0_20px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl">
-            <div className="flex items-center justify-between border-b border-white/5 px-4 py-3 sm:px-5">
+          <div className="mb-3 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] shadow-[0_20px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+            <div className="flex items-center justify-between border-b border-white/5 px-3 py-2.5 sm:px-5 sm:py-3">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-300/10 text-2xl">{config.icon}</div>
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-300/10 text-xl sm:h-10 sm:w-10 sm:text-2xl">{config.icon}</div>
                 <div>
-                  <p className="text-[9px] font-black tracking-[0.18em] text-cyan-300">WORKOUT SESSION</p>
-                  <h2 className="mt-0.5 text-base font-black sm:text-lg">{config.shortName}</h2>
+                  <p className="text-[8px] font-black tracking-[0.18em] text-cyan-300 sm:text-[9px]">WORKOUT SESSION</p>
+                  <h2 className="mt-0.5 text-sm font-black sm:text-lg">{config.shortName}</h2>
                 </div>
               </div>
-              <div className="rounded-full border border-emerald-400/20 bg-emerald-400/5 px-2.5 py-1 text-[9px] font-black text-emerald-300">AI COACH</div>
+              <div className="rounded-full border border-emerald-400/20 bg-emerald-400/5 px-2 py-1 text-[8px] font-black text-emerald-300 sm:px-2.5 sm:text-[9px]">AI COACH</div>
             </div>
-            <div className="p-4 sm:p-5">
+            <div className="p-3 sm:p-5">
             <div className="mb-4 hidden grid-cols-3 gap-3 md:grid lg:grid-cols-5">
               {(Object.keys(EXERCISE_CONFIGS) as ExerciseType[]).map(
                 (type) => (
@@ -1609,43 +1824,45 @@ function WorkoutView({
               )}
             </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-xs font-bold text-slate-400">
+                <p className="text-[10px] font-bold text-slate-400 sm:text-xs">
                   목표 횟수
                 </p>
                 <div className="mt-1 flex items-center gap-2">
                   <button
+                    aria-label="목표 횟수 줄이기"
                     onClick={() => {
                       if (isWorkoutStarted) return;
                       setTargetReps((prev) => Math.max(1, prev - 1));
                     }}
                     disabled={isWorkoutStarted}
-                    className={`h-9 w-9 rounded-xl bg-slate-800 text-lg font-black text-cyan-400 hover:bg-slate-700 ${isWorkoutStarted ? 'cursor-not-allowed opacity-50' : ''}`}
+                    className={`h-8 w-8 rounded-lg bg-slate-800 text-base font-black text-cyan-400 hover:bg-slate-700 sm:h-9 sm:w-9 sm:rounded-xl sm:text-lg ${isWorkoutStarted ? 'cursor-not-allowed opacity-50' : ''}`}
                   >
                     -
                   </button>
-                  <span className="w-12 text-center text-xl font-black">
+                  <span className="w-10 text-center text-lg font-black sm:w-12 sm:text-xl">
                     {targetReps}
                   </span>
                   <button
+                    aria-label="목표 횟수 늘리기"
                     onClick={() => {
                       if (isWorkoutStarted) return;
                       setTargetReps((prev) => prev + 1);
                     }}
                     disabled={isWorkoutStarted}
-                    className={`h-9 w-9 rounded-xl bg-slate-800 text-lg font-black text-cyan-400 hover:bg-slate-700 ${isWorkoutStarted ? 'cursor-not-allowed opacity-50' : ''}`}
+                    className={`h-8 w-8 rounded-lg bg-slate-800 text-base font-black text-cyan-400 hover:bg-slate-700 sm:h-9 sm:w-9 sm:rounded-xl sm:text-lg ${isWorkoutStarted ? 'cursor-not-allowed opacity-50' : ''}`}
                   >
                     +
                   </button>
                 </div>
               </div>
 
-              <div className="rounded-xl bg-slate-950 px-4 py-3">
-                <p className="text-[10px] font-bold tracking-widest text-slate-500">
+              <div className="rounded-xl bg-slate-950 px-3 py-2.5 sm:px-4 sm:py-3">
+                <p className="text-[9px] font-bold tracking-widest text-slate-500 sm:text-[10px]">
                   TODAY GUIDE
                 </p>
-                <p className="mt-1 text-xs text-slate-300">
+                <p className="mt-0.5 text-[10px] text-slate-300 sm:mt-1 sm:text-xs">
                   {config.guideText}
                 </p>
               </div>
@@ -1653,7 +1870,10 @@ function WorkoutView({
             </div>
           </div>
 
-          <div className="group relative aspect-video w-full overflow-hidden rounded-[2rem] border border-white/10 bg-black shadow-[0_30px_100px_rgba(0,0,0,0.55)] ring-1 ring-cyan-300/5 md:aspect-[4/3]">
+          <div className="group relative aspect-[4/3] w-full overflow-hidden rounded-[1.35rem] border border-cyan-300/15 bg-black shadow-[0_30px_100px_rgba(0,0,0,0.55)] ring-1 ring-cyan-300/10 cf-pulse md:aspect-[4/3]">
+            <div className="pointer-events-none absolute inset-0 z-[5] bg-[linear-gradient(rgba(0,255,204,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,204,0.03)_1px,transparent_1px)] bg-[size:26px_26px] opacity-40" />
+            <div className="pointer-events-none absolute left-0 right-0 top-0 z-[6] h-24 bg-gradient-to-b from-cyan-300/10 to-transparent cf-scan" />
+            <div className="pointer-events-none absolute left-1/2 top-1/2 z-[6] h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-300/10 cf-spin" />
             <video
               ref={videoRef}
               className="absolute left-0 top-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.015]"
@@ -1667,6 +1887,10 @@ function WorkoutView({
               height={480}
               className="absolute left-0 top-0 h-full w-full"
             />
+            <div className="cf-grid-overlay pointer-events-none absolute inset-0 z-[7] opacity-40" />
+            <div className="pointer-events-none absolute inset-0 z-[9] rounded-[2rem] bg-[radial-gradient(circle_at_50%_50%,transparent_42%,rgba(0,0,0,.18)_100%)]" />
+            <div className="pointer-events-none absolute left-1/2 top-1/2 z-[9] h-44 w-44 -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-300/10 cf-orbit" />
+            <div className="pointer-events-none absolute left-1/2 top-1/2 z-[9] h-32 w-32 -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-300/10 border-dashed cf-orbit-reverse" />
 
             {!cameraReady && !cameraError && (
               <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/90">
@@ -1718,22 +1942,22 @@ function WorkoutView({
                   <div className="absolute right-4 top-1/2 h-16 w-px -translate-y-1/2 bg-cyan-300/30" />
                 </div>
 
-                <div className="absolute left-3 top-3 z-20 rounded-full border border-white/10 bg-black/45 px-3 py-1.5 text-[9px] font-black tracking-[0.18em] text-white/75 backdrop-blur-xl sm:left-5 sm:top-5">
+                <div className="absolute left-2.5 top-2.5 z-20 rounded-full border border-white/10 bg-black/45 px-2 py-1 text-[8px] font-black tracking-[0.15em] text-white/80 backdrop-blur-xl sm:left-5 sm:top-5 sm:px-3 sm:py-1.5 sm:text-[9px] sm:tracking-[0.18em]">
                   {config.shortName.toUpperCase()} · LIVE
                 </div>
 
-                <div className="absolute left-3 right-3 top-12 z-20 flex items-start justify-between gap-2 sm:left-5 sm:right-5 sm:top-16">
-                  <div className="rounded-2xl border border-white/10 bg-black/50 px-3 py-2 shadow-[0_8px_30px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:px-5 sm:py-3">
-                    <p className="text-[9px] font-black tracking-widest text-cyan-400">
+                <div className="absolute left-2.5 right-2.5 top-11 z-20 flex items-start justify-between gap-2 sm:left-5 sm:right-5 sm:top-16">
+                  <div className="rounded-xl border border-white/10 bg-black/50 px-2.5 py-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:rounded-2xl sm:px-5 sm:py-3">
+                    <p className="text-[7px] font-black tracking-widest text-cyan-400 sm:text-[9px]">
                       CURRENT REPS
                     </p>
-                    <p className="text-xl font-black sm:text-2xl">
-                      <span className="text-cyan-400">
+                    <p className="text-lg font-black sm:text-2xl">
+                      <span key={goodReps} className="text-cyan-400 cf-pop">
                         {goodReps}
                       </span>
                       <span className="text-sm text-slate-500"> / {targetReps}</span>
                     </p>
-                    <div className="mt-2 h-1.5 w-24 overflow-hidden rounded-full bg-white/10 sm:w-32">
+                    <div className="mt-1.5 h-1 w-20 overflow-hidden sm:mt-2 sm:h-1.5 sm:w-24 rounded-full bg-white/10 sm:w-32">
                       <div
                         className="h-full rounded-full bg-cyan-300 shadow-[0_0_14px_rgba(103,232,249,0.55)] transition-all duration-500"
                         style={{ width: `${Math.min(100, (goodReps / Math.max(1, targetReps)) * 100)}%` }}
@@ -1742,7 +1966,7 @@ function WorkoutView({
                   </div>
 
                   <div
-                    className={`rounded-full border px-4 py-2 text-[10px] font-black tracking-widest ${
+                    className={`rounded-full border px-2.5 py-1.5 text-[8px] font-black tracking-widest sm:px-4 sm:py-2 sm:text-[10px] cf-border-pulse ${
                       isGoodFormUI
                         ? 'border-emerald-400 bg-emerald-400/15 text-emerald-300'
                         : 'border-rose-400 bg-rose-400/15 text-rose-300'
@@ -1754,27 +1978,27 @@ function WorkoutView({
                   </div>
                 </div>
 
-                <div className="absolute bottom-3 left-3 right-3 z-20 sm:bottom-5 sm:left-5 sm:right-5">
-                  <div className="mb-2 rounded-2xl border border-white/10 bg-black/55 px-4 py-3 shadow-[0_10px_35px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+                <div className="absolute bottom-2.5 left-2.5 right-2.5 z-20 sm:bottom-5 sm:left-5 sm:right-5">
+                  <div className="mb-1.5 rounded-xl border border-white/10 bg-black/55 px-3 py-2 shadow-[0_10px_35px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:mb-2 sm:rounded-2xl sm:px-4 sm:py-3 cf-reveal">
                     <p
-                      className="text-xs font-black text-white transition-none opacity-100 sm:text-sm"
+                      className="text-[10px] font-black leading-4 text-white transition-none opacity-100 sm:text-sm sm:leading-normal"
                     >
                       {feedback}
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <div className="rounded-2xl border border-white/10 bg-black/60 px-3 py-2.5 backdrop-blur-xl">
-                      <p className="text-[9px] font-bold text-slate-500">TIME</p>
-                      <p className="text-sm font-black">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <div className="rounded-xl border border-white/10 bg-black/60 px-2.5 py-2 backdrop-blur-xl sm:rounded-2xl sm:px-3 sm:py-2.5">
+                      <p className="text-[7px] font-bold text-slate-500 sm:text-[9px]">TIME</p>
+                      <p className="text-xs font-black sm:text-sm">
                         {formatTime(elapsedSeconds)}
                       </p>
                     </div>
 
-                    <div className="rounded-2xl border border-white/10 bg-black/60 px-3 py-2.5 backdrop-blur-xl">
-                      <p className="text-[9px] font-bold text-cyan-400">POSTURE</p>
+                    <div className="rounded-xl border border-white/10 bg-black/60 px-2.5 py-2 backdrop-blur-xl sm:rounded-2xl sm:px-3 sm:py-2.5">
+                      <p className="text-[7px] font-bold text-cyan-400 sm:text-[9px]">ANGLE</p>
                       <p className="text-sm font-black text-cyan-400">
-                        {isGoodFormUI ? '좋아요' : '조금만 수정'}
+                        {currentAngle !== null ? `${currentAngle}°` : '--'}
                       </p>
                     </div>
 
@@ -1788,9 +2012,9 @@ function WorkoutView({
                 </div>
 
                 {!isWorkoutStarted && !isGoalReached && (
-                  <div className="absolute inset-0 z-30 flex items-center justify-center bg-[#05070a]/70 p-5 backdrop-blur-md">
-                    <div className="w-full max-w-md rounded-[2rem] border border-white/10 bg-[#090d13]/95 p-5 text-center shadow-[0_30px_100px_rgba(0,0,0,0.65)] sm:p-8">
-                      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-400/10 text-3xl sm:h-16 sm:w-16 sm:text-4xl">
+                  <div className="absolute inset-0 z-30 flex items-center justify-center bg-[#05070a]/72 p-3 backdrop-blur-md sm:p-5">
+                    <div className="w-full max-w-md rounded-[1.5rem] border border-white/10 bg-[#090d13]/95 p-4 text-center shadow-[0_24px_70px_rgba(0,0,0,0.60)] sm:rounded-[2rem] sm:p-8">
+                      <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-400/10 text-3xl sm:h-16 sm:w-16 sm:text-4xl">
                         {config.icon}
                       </div>
 
@@ -1798,20 +2022,20 @@ function WorkoutView({
                         <span className="h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(103,232,249,0.9)]" />
                         READY TO WORKOUT
                       </div>
-                      <h2 className="mt-1 text-xl font-black sm:mt-2 sm:text-2xl">
+                      <h2 className="mt-1 text-lg font-black sm:mt-2 sm:text-2xl">
                         {config.shortName}
                       </h2>
 
-                      <div className="mt-3 rounded-2xl border border-white/5 bg-black/25 p-3 sm:mt-5 sm:p-4">
+                      <div className="mt-2.5 rounded-2xl border border-white/5 bg-black/25 p-2.5 sm:mt-5 sm:p-4">
                         <p className="text-[10px] font-black tracking-widest text-slate-500">TODAY'S TARGET</p>
-                        <p className="mt-1 text-2xl font-black text-white sm:text-3xl">
+                        <p className="mt-1 text-xl font-black text-white sm:text-3xl">
                           {targetReps}
                           <span className="ml-1 text-xs text-slate-500 sm:text-sm">회</span>
                         </p>
                       </div>
 
-                      <div className="mt-2 hidden flex-col items-start gap-3 rounded-2xl border border-slate-800 bg-slate-950 p-4 text-left sm:mt-4 sm:flex">
-                        <span className="text-xl">📷</span>
+                      <div className="mt-2 flex items-start gap-2 rounded-2xl border border-slate-800 bg-slate-950 p-3 text-left sm:mt-4 sm:flex sm:gap-3 sm:p-4">
+                        <span className="text-lg sm:text-xl">📷</span>
                         <div>
                           <p className="text-xs font-black text-white">
                             카메라를 사용합니다
@@ -1824,8 +2048,9 @@ function WorkoutView({
                       </div>
 
                       <button
+                        aria-label={`${config.shortName} 운동 시작`}
                         onClick={startWorkout}
-                        className="mt-3 w-full rounded-2xl bg-gradient-to-r from-cyan-300 to-cyan-200 py-3 font-black text-slate-950 shadow-[0_12px_40px_rgba(103,232,249,0.25)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_16px_50px_rgba(103,232,249,0.35)] active:translate-y-0 sm:mt-5 sm:py-3.5"
+                        className="cf-shimmer mt-3 w-full rounded-2xl bg-gradient-to-r from-cyan-300 to-cyan-200 py-3 font-black text-slate-950 shadow-[0_12px_40px_rgba(103,232,249,0.25)] transition duration-300 hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-[0_16px_50px_rgba(103,232,249,0.35)] active:translate-y-0 sm:mt-5 sm:py-3.5"
                       >
                         🎬 운동 시작 →
                       </button>
@@ -1835,8 +2060,8 @@ function WorkoutView({
 
                 {isGoalReached && (
 
-                  <div className="absolute inset-0 z-40 flex items-center justify-center bg-slate-950/90 p-5 backdrop-blur-md">
-                    <div className="w-full max-w-sm rounded-3xl border border-cyan-500/30 bg-slate-900 p-6 text-center shadow-2xl">
+                  <div className="absolute inset-0 z-40 flex items-center justify-center bg-slate-950/90 p-5 backdrop-blur-md cf-reveal">
+                    <div className="w-full max-w-sm rounded-3xl border border-cyan-500/30 bg-slate-900 p-6 text-center shadow-2xl cf-float">
                       <div className="text-4xl">🎉</div>
                       <p className="mt-3 text-xs font-black tracking-widest text-cyan-400">
                         WORKOUT COMPLETE
@@ -1882,10 +2107,10 @@ function WorkoutView({
 
                       {history.length > 0 && history[0].exercise === config.shortName && (
                         <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950 p-3">
-                          <p className="text-[10px] font-bold tracking-widest text-slate-500">
+                          <p className="text-[9px] font-bold tracking-widest text-slate-500 sm:text-[10px]">
                             GROWTH
                           </p>
-                          <p className="mt-1 text-xs text-slate-300">
+                          <p className="mt-0.5 text-[10px] text-slate-300 sm:mt-1 sm:text-xs">
                             이전 기록과 비교하면서 꾸준히 성장해보세요 💪
                           </p>
                         </div>
@@ -1916,7 +2141,7 @@ function WorkoutView({
           </div>
         </section>
 
-        <aside className="space-y-4">
+        <aside className="hidden space-y-4 lg:block">
           <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.035] p-5 shadow-[0_18px_55px_rgba(0,0,0,0.20)] backdrop-blur-xl">
             <p className="text-xs font-black tracking-widest text-cyan-400">
               LIVE ANALYSIS
@@ -1927,7 +2152,7 @@ function WorkoutView({
 
             <div className="mt-4 space-y-3">
               <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-3">
                   <span className="text-[10px] font-black tracking-widest text-slate-500">AI ANALYSIS</span>
                   <span className={`rounded-full px-2 py-1 text-[9px] font-black ${isLoaded ? 'bg-emerald-400/10 text-emerald-300' : 'bg-amber-400/10 text-amber-300'}`}>
                     {isLoaded ? '● LIVE' : '● 준비 중'}
@@ -2119,7 +2344,7 @@ function WorkoutView({
                           key={record.id}
                           className="rounded-2xl border border-white/5 bg-black/20 p-3"
                         >
-                          <div className="flex items-center justify-between">
+                          <div className="flex items-center justify-between gap-3">
                             <span className="text-sm font-black">
                               {record.exercise}
                             </span>
@@ -2145,6 +2370,45 @@ function WorkoutView({
             </div>
           )}
         </aside>
+
+        <section className="lg:hidden">
+          <div className="rounded-2xl border border-cyan-300/10 bg-white/[0.035] p-3.5 shadow-[0_14px_45px_rgba(0,0,0,0.20)] backdrop-blur-xl cf-reveal">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[8px] font-black tracking-[0.18em] text-cyan-400">LIVE ANALYSIS</p>
+                <h2 className="mt-1 text-sm font-black">실시간 자세 상태</h2>
+              </div>
+              <span className={`rounded-full px-2 py-1 text-[8px] font-black ${isLoaded ? 'bg-emerald-400/10 text-emerald-300' : 'bg-amber-400/10 text-amber-300'}`}>
+                {isLoaded ? '● LIVE' : '● 준비'}
+              </span>
+            </div>
+
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              <div className="rounded-xl bg-black/25 p-2.5">
+                <p className="text-[7px] font-bold tracking-widest text-slate-500">FORM</p>
+                <p className={`mt-1 text-[11px] font-black ${isGoodFormUI ? 'text-emerald-300' : 'text-rose-300'}`}>
+                  {isGoodFormUI ? '좋음' : '교정'}
+                </p>
+              </div>
+              <div className="rounded-xl bg-black/25 p-2.5">
+                <p className="text-[7px] font-bold tracking-widest text-slate-500">ANGLE</p>
+                <p className="mt-1 text-[11px] font-black text-cyan-300">{currentAngle !== null ? `${currentAngle}°` : '--'}</p>
+              </div>
+              <div className="rounded-xl bg-black/25 p-2.5">
+                <p className="text-[7px] font-bold tracking-widest text-slate-500">SCORE</p>
+                <p className="mt-1 text-[11px] font-black text-cyan-300">{score}</p>
+              </div>
+            </div>
+
+            <div className="mt-2 rounded-xl border border-cyan-400/10 bg-cyan-400/5 px-3 py-2.5">
+              <p className="text-[8px] font-bold tracking-widest text-cyan-400/70">COACHING TIP</p>
+              <p className="mt-1 text-[10px] leading-4 text-slate-300">{feedback}</p>
+            </div>
+          </div>
+        </section>
+      </div>
+      <div className="pointer-events-none fixed inset-x-0 bottom-2 z-50 flex justify-center lg:hidden">
+        <div className="cf-glass rounded-full border border-cyan-300/10 px-3 py-1.5 text-[8px] font-black tracking-[0.16em] text-cyan-200/70 shadow-[0_0_30px_rgba(34,211,238,.08)]">CHOWIFIT • AI VISION ACTIVE</div>
       </div>
     </main>
   );
